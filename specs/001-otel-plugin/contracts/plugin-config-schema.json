@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/contracts/plugin-config-schema.json",
+  "title": "haproxy-spoa-hub-plugin-otel configuration",
+  "description": "JSON Schema for the TOML configuration the plugin accepts under [plugins.params]. Returned from the plugin's config_schema() entry point. Mirrors the directive vocabulary of HAProxy's built-in OpenTelemetry addon. Representative subset; full schema is generated mechanically from addon-directive-mapping.md during implementation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["instrumentation"],
+  "properties": {
+    "instrumentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "config_pipeline": { "type": "string" },
+        "groups": { "type": "array", "items": { "type": "string" } },
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "rate_limit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "window"],
+          "properties": {
+            "count": { "type": "integer", "minimum": 1 },
+            "window": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "debug_level": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "option": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "disabled": { "type": "boolean" },
+            "dontlog_normal": { "type": "boolean" },
+            "hard_errors": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "scopes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scope" }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "scopes"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "scopes": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    },
+    "tracer_pipelines": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tracer_pipeline" }
+    },
+    "meter_pipelines": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/meter_pipeline" }
+    },
+    "logger_pipelines": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/logger_pipeline" }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_in_flight_transactions": { "type": "integer", "minimum": 1, "default": 100000 },
+        "correlation_handle_ttl": { "$ref": "#/$defs/duration", "default": "60s" },
+        "shutdown_drain_timeout": { "$ref": "#/$defs/duration", "default": "5s" }
+      }
+    }
+  },
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ns|us|ms|s|m|h)$"
+    },
+    "value_source": {
+      "type": ["string", "integer", "number", "boolean"],
+      "description": "TOML literal, or a string of the form '$arg.<name>' to read a SPOE argument the plugin received in the current message."
+    },
+    "attribute_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/value_source" },
+        "type": { "enum": ["string", "int", "double", "bool"] },
+        "condition": { "type": "string" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "event"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "event": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["request", "response", "group"] },
+        "event_condition": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "if": { "type": "string" },
+            "unless": { "type": "string" }
+          }
+        },
+        "idle_timeout": { "$ref": "#/$defs/duration" },
+        "spans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "parent": { "type": "string" },
+              "link": { "type": "array", "items": { "type": "string" } },
+              "root": { "type": "boolean" },
+              "tracer_pipeline": { "type": "string" }
+            }
+          }
+        },
+        "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } }
+            }
+          }
+        },
+        "baggage": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } },
+        "status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code"],
+          "properties": {
+            "code": { "enum": ["ok", "error", "unset"] },
+            "condition": { "type": "string" }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["span"],
+            "properties": { "span": { "type": "string" } }
+          }
+        },
+        "inject": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prefix": { "type": "string" },
+            "use_vars": { "type": "boolean" },
+            "use_headers": { "type": "boolean" }
+          }
+        },
+        "extract": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prefix": { "type": "string" },
+            "use_vars": { "type": "boolean" },
+            "use_headers": { "type": "boolean" }
+          }
+        },
+        "finish": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": { "name": { "type": "string" } }
+          }
+        },
+        "instruments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "name", "value"],
+            "properties": {
+              "kind": { "enum": ["cnt_int", "hist_int", "udcnt_int", "gauge_int"] },
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "unit": { "type": "string" },
+              "value": { "$ref": "#/$defs/value_source" },
+              "bounds": { "type": "array", "items": { "type": "number" } },
+              "aggr": { "enum": ["sum", "last_value", "histogram", "exp_histogram", "drop", "default"] },
+              "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } },
+              "meter_pipeline": { "type": "string" }
+            }
+          }
+        },
+        "instrument_updates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } }
+            }
+          }
+        },
+        "log_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["severity"],
+            "properties": {
+              "severity": { "enum": ["TRACE", "TRACE2", "TRACE3", "TRACE4", "DEBUG", "DEBUG2", "DEBUG3", "DEBUG4", "INFO", "INFO2", "INFO3", "INFO4", "WARN", "WARN2", "WARN3", "WARN4", "ERROR", "ERROR2", "ERROR3", "ERROR4", "FATAL", "FATAL2", "FATAL3", "FATAL4"] },
+              "id": { "type": "integer" },
+              "event_name": { "type": "string" },
+              "span": { "type": "string" },
+              "body": { "$ref": "#/$defs/value_source" },
+              "attributes": { "type": "array", "items": { "$ref": "#/$defs/attribute_rule" } },
+              "logger_pipeline": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint"],
+      "properties": {
+        "endpoint": { "type": "string", "format": "uri" },
+        "protocol": { "enum": ["grpc", "http/protobuf", "http/json"], "default": "grpc" },
+        "compression": { "enum": ["none", "gzip", "zstd"], "default": "none" },
+        "timeout": { "$ref": "#/$defs/duration", "default": "10s" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ca": { "type": "string" },
+            "client_cert": { "type": "string" },
+            "client_key": { "type": "string" },
+            "server_name": { "type": "string" },
+            "insecure_skip_verify": { "type": "boolean", "default": false }
+          }
+        },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "max_attempts": { "type": "integer", "minimum": 1, "default": 5 },
+            "initial_backoff": { "$ref": "#/$defs/duration", "default": "1s" },
+            "max_backoff": { "$ref": "#/$defs/duration", "default": "30s" }
+          }
+        },
+        "queue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_size": { "type": "integer", "minimum": 1, "default": 2048 },
+            "max_export_batch_size": { "type": "integer", "minimum": 1, "default": 512 },
+            "scheduled_delay": { "$ref": "#/$defs/duration", "default": "5s" }
+          }
+        }
+      }
+    },
+    "sampler": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "enum": ["always_on", "always_off"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ratio"],
+          "properties": {
+            "kind": { "const": "trace_id_ratio" },
+            "ratio": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "root"],
+          "properties": {
+            "kind": { "const": "parent_based" },
+            "root": { "$ref": "#/$defs/sampler" }
+          }
+        }
+      ]
+    },
+    "tracer_pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "exporter"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "sampler": { "$ref": "#/$defs/sampler" },
+        "exporter": { "$ref": "#/$defs/exporter" },
+        "resource": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
+        }
+      }
+    },
+    "meter_pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "exporter"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "reader": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interval": { "$ref": "#/$defs/duration", "default": "60s" },
+            "timeout": { "$ref": "#/$defs/duration", "default": "10s" }
+          }
+        },
+        "aggregations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["instrument_name", "aggregation"],
+            "properties": {
+              "instrument_name": { "type": "string" },
+              "aggregation": { "enum": ["sum", "last_value", "histogram", "exp_histogram", "drop", "default"] }
+            }
+          }
+        },
+        "exporter": { "$ref": "#/$defs/exporter" },
+        "resource": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
+        }
+      }
+    },
+    "logger_pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "exporter"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "exporter": { "$ref": "#/$defs/exporter" },
+        "resource": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
+        }
+      }
+    }
+  }
+}

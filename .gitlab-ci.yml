@@ -1,0 +1,273 @@
+stages:
+  - check
+  - build
+  - smoke
+  - e2e
+  - release
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+variables:
+  # renovate: datasource=docker depName=rust
+  RUST_VERSION: "1.94"
+  CARGO_INCREMENTAL: "0"
+  # Debian bookworm ships glibc 2.36. Plugins must be loaded by a process
+  # linked against the same or newer glibc.
+  GLIBC_VERSION: "2.36"
+  LIB_NAME: "libotel_plugin"
+  HUB_TAG: "latest"
+  HUB_REPO: "https://gitlab.com/haproxy-haptic/haproxy-spoa-hub.git"
+  HUB_REF: "main"
+
+.rules-code:
+  rules:
+    - changes:
+        - "**/*.rs"
+        - Cargo.toml
+        - Cargo.lock
+        - "tests/**/*"
+        - .gitlab-ci.yml
+
+# =============================================================================
+# Check Stage
+# =============================================================================
+
+fmt:
+  stage: check
+  image: rust:${RUST_VERSION}-bookworm
+  tags:
+    - saas-linux-small-amd64
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - !reference [.rules-code, rules]
+  interruptible: true
+  before_script:
+    - rustup component add rustfmt
+  script:
+    - cargo fmt -- --check
+
+clippy:
+  stage: check
+  image: rust:${RUST_VERSION}-bookworm
+  tags:
+    - saas-linux-large-amd64
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - !reference [.rules-code, rules]
+  interruptible: true
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features -- -D warnings
+
+test:
+  stage: check
+  image: rust:${RUST_VERSION}-bookworm
+  tags:
+    - saas-linux-large-amd64
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - !reference [.rules-code, rules]
+  interruptible: true
+  script:
+    - cargo test --all-features
+
+# =============================================================================
+# Build Stage — parallel matrix for all supported architectures
+# =============================================================================
+
+build:
+  stage: build
+  image: rust:${RUST_VERSION}-bookworm
+  tags:
+    - saas-linux-large-amd64
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - !reference [.rules-code, rules]
+  interruptible: true
+  parallel:
+    matrix:
+      - ARCH: amd64
+      - ARCH: arm64
+      - ARCH: armv7
+  before_script:
+    - |
+      case "${ARCH}" in
+        amd64)
+          RUST_TARGET="x86_64-unknown-linux-gnu"
+          CROSS_PKG=""
+          CROSS_LINKER=""
+          ;;
+        arm64)
+          RUST_TARGET="aarch64-unknown-linux-gnu"
+          CROSS_PKG="gcc-aarch64-linux-gnu"
+          CROSS_LINKER="aarch64-linux-gnu-gcc"
+          ;;
+        armv7)
+          RUST_TARGET="armv7-unknown-linux-gnueabihf"
+          CROSS_PKG="gcc-arm-linux-gnueabihf"
+          CROSS_LINKER="arm-linux-gnueabihf-gcc"
+          ;;
+      esac
+    - export RUST_TARGET
+    - rustup target add "${RUST_TARGET}"
+    - |
+      if [ -n "${CROSS_PKG}" ]; then
+        apt-get update -qq && apt-get install -y -qq "${CROSS_PKG}" >/dev/null
+        mkdir -p .cargo
+        cat > .cargo/config.toml <<EOF
+      [target.${RUST_TARGET}]
+      linker = "${CROSS_LINKER}"
+      EOF
+      fi
+  script:
+    - cargo build --release --target "${RUST_TARGET}"
+    - |
+      mkdir -p artifacts
+      cp "target/${RUST_TARGET}/release/${LIB_NAME}.so" \
+         "artifacts/${LIB_NAME}-${ARCH}-glibc${GLIBC_VERSION}.so"
+      ls -lh "artifacts/${LIB_NAME}-${ARCH}-glibc${GLIBC_VERSION}.so"
+  artifacts:
+    paths:
+      - artifacts/
+    expire_in: 1 week
+
+# =============================================================================
+# Smoke Stage — load the .so into the public hub image and verify the plugin
+# initialises under each target architecture. arm64/armv7 run under QEMU
+# binfmt on the amd64 runner.
+# =============================================================================
+
+.smoke-base:
+  stage: smoke
+  image: docker:latest
+  tags:
+    - saas-linux-large-amd64
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - !reference [.rules-code, rules]
+  interruptible: true
+  timeout: 10m
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache bash
+    - docker run --rm --privileged tonistiigi/binfmt --install arm64,arm
+
+smoke-amd64:
+  extends: .smoke-base
+  needs:
+    - job: "build: [amd64]"
+      artifacts: true
+  script:
+    - tests/smoke/run.sh --arch amd64
+
+smoke-arm64:
+  extends: .smoke-base
+  needs:
+    - job: "build: [arm64]"
+      artifacts: true
+  script:
+    - tests/smoke/run.sh --arch arm64
+
+smoke-armv7:
+  extends: .smoke-base
+  needs:
+    - job: "build: [armv7]"
+      artifacts: true
+  script:
+    - tests/smoke/run.sh --arch armv7
+
+# =============================================================================
+# E2E Stage — full HAProxy + SPOA hub + OTel plugin + OTel collector test
+# Runs once on amd64 (the docker compose stack is amd64-only).
+# =============================================================================
+
+e2e:
+  stage: e2e
+  image: docker:latest
+  tags:
+    - saas-linux-large-amd64
+  needs: ["fmt", "clippy", "test"]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - !reference [.rules-code, rules]
+  interruptible: true
+  timeout: 20m
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    # The integration Dockerfile uses ../../.. as its build context so it
+    # can COPY both repos. Stage them side-by-side in /workspace.
+    - apk add --no-cache bash git make jq curl
+    - mkdir -p /workspace
+    - mv "$CI_PROJECT_DIR" /workspace/haproxy-spoa-hub-plugin-otel
+    - git clone --depth 1 --branch "${HUB_REF}" "${HUB_REPO}" /workspace/haproxy-spoa-hub
+    - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration
+  script:
+    - make build
+    - make test
+  after_script:
+    - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration && make logs || true
+
+# =============================================================================
+# Release Stage — triggered by v* tags. Publishes the per-arch .so artifacts.
+# =============================================================================
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - saas-linux-small-amd64
+  needs:
+    - build
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v.*/
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - |
+      VERSION="${CI_COMMIT_TAG#v}"
+      awk -v ver="${VERSION}" '
+        /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) found=1 }
+        found { print }
+      ' CHANGELOG.md > release-notes.md
+      if [ ! -s release-notes.md ]; then
+        echo "Release ${CI_COMMIT_TAG}" > release-notes.md
+      fi
+      cat release-notes.md
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "$CI_COMMIT_TAG"
+    description: ./release-notes.md
+    assets:
+      links:
+        - name: "${LIB_NAME}-amd64-glibc${GLIBC_VERSION}.so"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/artifacts/${LIB_NAME}-amd64-glibc${GLIBC_VERSION}.so?job=build%3A+%5Bamd64%5D"
+          link_type: package
+        - name: "${LIB_NAME}-arm64-glibc${GLIBC_VERSION}.so"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/artifacts/${LIB_NAME}-arm64-glibc${GLIBC_VERSION}.so?job=build%3A+%5Barm64%5D"
+          link_type: package
+        - name: "${LIB_NAME}-armv7-glibc${GLIBC_VERSION}.so"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/artifacts/${LIB_NAME}-armv7-glibc${GLIBC_VERSION}.so?job=build%3A+%5Barmv7%5D"
+          link_type: package

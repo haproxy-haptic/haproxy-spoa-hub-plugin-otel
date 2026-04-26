@@ -1,0 +1,45 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    user: "0:0"
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro,z
+      - otel-data:/var/log/otel
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "components"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+
+  hub:
+    build:
+      context: ../../..
+      dockerfile: haproxy-spoa-hub-plugin-otel/tests/integration/Dockerfile.hub
+    command: ["--config", "/config/config.toml"]
+    volumes:
+      - ./hub-config:/config:z
+      - spoe-sock:/var/run/spoe
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  whoami:
+    image: traefik/whoami:latest
+    command: ["--port=80"]
+
+  haproxy:
+    image: haproxytech/haproxy-debian:3.0
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,z
+      - ./haproxy/spoe-otel.conf:/etc/haproxy/spoe-otel.conf:ro,z
+      - spoe-sock:/var/run/spoe
+    ports:
+      - "${HAPROXY_PORT:-8080}:8080"
+    depends_on:
+      - hub
+      - whoami
+
+volumes:
+  spoe-sock:
+  otel-data:

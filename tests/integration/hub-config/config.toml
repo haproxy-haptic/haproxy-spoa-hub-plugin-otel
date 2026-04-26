@@ -1,0 +1,97 @@
+plugin_dir = "/etc/haproxy-spoa-hub/plugins"
+default_timeout_ms = 500
+log_level = "info"
+
+[[listeners]]
+type = "unix"
+address = "/var/run/spoe/hub.sock"
+
+[[plugins]]
+name = "otel"
+library = "libotel_plugin.so"
+messages = ["otel-on-request", "otel-on-response"]
+
+[plugins.params.instrumentation]
+name = "haproxy-edge"
+scopes = ["request", "response"]
+
+[[plugins.params.tracer_pipelines]]
+name = "default"
+
+[plugins.params.tracer_pipelines.sampler]
+kind = "always_on"
+
+[plugins.params.tracer_pipelines.exporter]
+endpoint = "http://otel-collector:4317"
+protocol = "grpc"
+timeout = "5s"
+
+[plugins.params.tracer_pipelines.exporter.queue]
+max_size = 256
+max_export_batch_size = 32
+scheduled_delay = "100ms"
+
+[plugins.params.tracer_pipelines.resource]
+"service.name"      = "haproxy-edge"
+"service.version"   = "e2e"
+
+[[plugins.params.meter_pipelines]]
+name = "default"
+
+[plugins.params.meter_pipelines.exporter]
+endpoint = "http://otel-collector:4317"
+protocol = "grpc"
+
+[plugins.params.meter_pipelines.reader]
+interval = "200ms"
+timeout  = "1s"
+
+[[plugins.params.scopes]]
+name  = "request"
+event = "otel-on-request"
+kind  = "request"
+
+[[plugins.params.scopes.spans]]
+name = "haproxy.request"
+
+[[plugins.params.scopes.attributes]]
+key    = "http.request.method"
+source = "$arg.method"
+
+[[plugins.params.scopes.attributes]]
+key    = "url.path"
+source = "$arg.path"
+
+[[plugins.params.scopes.attributes]]
+key    = "server.address"
+source = "$arg.host"
+
+[[plugins.params.scopes.attributes]]
+key    = "client.address"
+source = "$arg.src"
+
+[plugins.params.scopes.extract]
+prefix = ""
+use_headers = true
+
+[plugins.params.scopes.inject]
+prefix = ""
+use_headers = true
+
+[[plugins.params.scopes.instruments]]
+kind  = "cnt_int"
+name  = "http.server.request_count"
+value = 1
+
+[[plugins.params.scopes]]
+name  = "response"
+event = "otel-on-response"
+kind  = "response"
+
+[[plugins.params.scopes.attributes]]
+key    = "http.response.status_code"
+source = "$arg.status"
+
+[plugins.params.scopes.status]
+code      = "error"
+condition = "$arg.status >= 500"

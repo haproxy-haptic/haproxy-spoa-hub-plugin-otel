@@ -1,0 +1,35 @@
+target/
+debug/
+release/
+*.rs.bk
+*.rlib
+*.prof*
+.idea/
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+
+# Integration test artifacts (built locally, not committed)
+tests/integration/bin/
+tests/integration/plugins/
+tests/integration/haproxy/cert.pem
+
+# Smoke test artifacts (built locally per-arch)
+artifacts/
+tests/smoke/plugin.so
+
+# Benchmark results (generated per run)
+benchmarks/results/
+benchmarks/certs/*.pem
+benchmarks/certs/*.key
+benchmarks/certs/*.crt
+benchmarks/certs/*.csr
+benchmarks/certs/*.srl
+
+# Claude Code runtime state (per-machine, not part of the project)
+.claude/scheduled_tasks.lock
+.claude/worktrees/

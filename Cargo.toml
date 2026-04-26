@@ -1,0 +1,85 @@
+[package]
+name = "otel-plugin"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86"
+description = "OpenTelemetry plugin for haproxy-spoa-hub (traces, metrics, logs via OTLP)"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+haproxy-spoa-hub-plugin-api = "0.2"
+abi_stable = "0.11"
+
+# OpenTelemetry — see specs/001-otel-plugin/research.md for selection rationale.
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", default-features = false, features = [
+    "grpc-tonic",
+    "http-proto",
+    "http-json",
+    "tls",
+    "tls-roots",
+    "gzip-tonic",
+    "trace",
+    "metrics",
+    "logs",
+    "reqwest-client",
+    "reqwest-rustls",
+] }
+opentelemetry-semantic-conventions = "0.27"
+
+# Async runtime — version-aligned with the hub.
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
+
+# Configuration parsing & validation.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+humantime-serde = "1"
+jsonschema = { version = "0.30", default-features = false }
+url = { version = "2", features = ["serde"] }
+
+# Concurrent correlation map (DashMap per research item R4).
+dashmap = "6"
+
+# Atomic config swap for SIGHUP reload (research item R7).
+arc-swap = "1"
+
+# Used for OTLP/gRPC custom metadata headers (FR-013).
+tonic = { version = "0.12", default-features = false, features = ["transport"] }
+
+# Logging (the hub installs a tracing-subscriber bridge).
+log = "0.4"
+
+# Errors.
+thiserror = "2"
+anyhow = "1"
+
+# Random handles.
+rand = "0.8"
+hex = "0.4"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+serde_json = "1"
+tonic = "0.12"
+prost = "0.13"
+hyper = { version = "1", features = ["full"] }
+axum = "0.7"
+opentelemetry-proto = { version = "0.27", features = ["gen-tonic", "trace", "metrics", "logs", "with-serde"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "test-util"] }
+tower = "0.5"
+tokio-stream = { version = "0.1", features = ["net"] }
+tempfile = "3"
+
+[[bench]]
+name = "hot_path"
+harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1

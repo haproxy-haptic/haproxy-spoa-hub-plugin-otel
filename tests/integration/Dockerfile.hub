@@ -1,0 +1,24 @@
+FROM rust:1.86-bookworm AS builder-hub
+WORKDIR /build
+COPY haproxy-spoa-hub/Cargo.toml haproxy-spoa-hub/Cargo.lock haproxy-spoa-hub/rustfmt.toml ./
+COPY haproxy-spoa-hub/crates/ crates/
+COPY haproxy-spoa-hub/examples/ examples/
+RUN cargo build --release -p haproxy-spoa-hub
+
+FROM rust:1.86-bookworm AS builder-plugin
+WORKDIR /build
+COPY haproxy-spoa-hub-plugin-otel/Cargo.toml haproxy-spoa-hub-plugin-otel/Cargo.lock* ./
+COPY haproxy-spoa-hub-plugin-otel/src/ src/
+COPY haproxy-spoa-hub-plugin-otel/benches/ benches/
+COPY haproxy-spoa-hub-plugin-otel/specs/ specs/
+RUN cargo build --release --lib
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgcc-s1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /etc/haproxy-spoa-hub/plugins /var/run/spoe
+COPY --from=builder-hub /build/target/release/haproxy-spoa-hub /usr/local/bin/
+COPY --from=builder-plugin /build/target/release/libotel_plugin.so /etc/haproxy-spoa-hub/plugins/
+ENTRYPOINT ["haproxy-spoa-hub"]
+CMD ["--config", "/etc/haproxy-spoa-hub/config.toml"]

@@ -1,0 +1,37 @@
+plugin_dir = "/etc/haproxy-spoa-hub/plugins"
+default_timeout_ms = 500
+log_level = "debug"
+
+[[listeners]]
+type = "tcp"
+address = "0.0.0.0:12345"
+
+[[plugins]]
+name = "otel"
+library = "libotel_plugin.so"
+messages = ["otel-on-request", "otel-on-response"]
+
+# Minimal but realistic plugin params: a single tracer pipeline pointed
+# at a non-existent endpoint (the plugin uses a lazy gRPC client, so
+# init succeeds without a reachable collector). Verifies that pipeline
+# construction — including the tokio runtime spawn — works under the
+# target architecture.
+
+[plugins.params.instrumentation]
+name = "smoke"
+scopes = ["request"]
+
+[[plugins.params.tracer_pipelines]]
+name = "default"
+[plugins.params.tracer_pipelines.sampler]
+kind = "always_off"
+[plugins.params.tracer_pipelines.exporter]
+endpoint = "http://127.0.0.1:65535"
+protocol = "grpc"
+
+[[plugins.params.scopes]]
+name  = "request"
+event = "otel-on-request"
+kind  = "request"
+[[plugins.params.scopes.spans]]
+name = "haproxy.request"
