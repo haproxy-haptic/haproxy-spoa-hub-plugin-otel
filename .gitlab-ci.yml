@@ -219,8 +219,11 @@ e2e:
   before_script:
     # The integration Dockerfile uses ../../.. as its build context so it
     # can COPY both repos. Stage them side-by-side in /workspace.
+    # `cd /tmp` first because the shell's cwd is $CI_PROJECT_DIR — moving
+    # it away mid-shell would invalidate the cwd for subsequent commands.
     - apk add --no-cache bash git make jq curl
     - mkdir -p /workspace
+    - cd /tmp
     - mv "$CI_PROJECT_DIR" /workspace/haproxy-spoa-hub-plugin-otel
     - git clone --depth 1 --branch "${HUB_REF}" "${HUB_REPO}" /workspace/haproxy-spoa-hub
     - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration
@@ -228,7 +231,7 @@ e2e:
     - make build
     - make test
   after_script:
-    - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration && make logs || true
+    - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration 2>/dev/null && make logs || true
 
 # =============================================================================
 # Release Stage — triggered by v* tags. Publishes the per-arch .so artifacts.
