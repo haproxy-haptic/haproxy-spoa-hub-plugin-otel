@@ -20,5 +20,10 @@ RUN apt-get update \
 RUN mkdir -p /etc/haproxy-spoa-hub/plugins /var/run/spoe
 COPY --from=builder-hub /build/target/release/haproxy-spoa-hub /usr/local/bin/
 COPY --from=builder-plugin /build/target/release/libotel_plugin.so /etc/haproxy-spoa-hub/plugins/
+# Bake the integration config in. Bind-mounting the host config from
+# docker-compose works locally but breaks under docker-in-docker (dind)
+# in GitLab CI: dind cannot see the runner's filesystem, so the bind
+# mount target is missing.
+COPY haproxy-spoa-hub-plugin-otel/tests/integration/hub-config/config.toml /etc/haproxy-spoa-hub/config.toml
 ENTRYPOINT ["haproxy-spoa-hub"]
 CMD ["--config", "/etc/haproxy-spoa-hub/config.toml"]
