@@ -228,6 +228,10 @@ e2e:
     - git clone --depth 1 --branch "${HUB_REF}" "${HUB_REPO}" /workspace/haproxy-spoa-hub
     - cd /workspace/haproxy-spoa-hub-plugin-otel/tests/integration
   script:
+    # Pre-pull external images that aren't otherwise built. dind can be
+    # flaky on first reach to Docker Hub (TLS handshake timeouts);
+    # retry up to 3 times before letting `make test` run.
+    - for i in 1 2 3; do docker pull traefik/whoami:latest && break || sleep 5; done
     - make build
     - make test
   after_script:
