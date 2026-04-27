@@ -587,12 +587,18 @@ async fn request_emits_only_transaction_scoped_vars() {
         vec![
             ("method", s("GET")),
             ("path", s("/regression")),
-            ("traceparent", s("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")),
+            (
+                "traceparent",
+                s("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"),
+            ),
         ],
     );
     let r = dispatch::dispatch(&state, &req);
 
-    assert!(!r.variables.is_empty(), "request-side dispatch produced no variables");
+    assert!(
+        !r.variables.is_empty(),
+        "request-side dispatch produced no variables"
+    );
     for v in r.variables.iter() {
         assert_eq!(
             v.scope,
@@ -605,7 +611,10 @@ async fn request_emits_only_transaction_scoped_vars() {
 
     // Sanity: at minimum we expect correlation + traceparent_out.
     let names: Vec<&str> = r.variables.iter().map(|v| v.name.as_str()).collect();
-    assert!(names.contains(&"correlation"), "missing `correlation`: {names:?}");
+    assert!(
+        names.contains(&"correlation"),
+        "missing `correlation`: {names:?}"
+    );
     assert!(
         names.iter().any(|n| n.ends_with("traceparent_out")),
         "missing `traceparent_out`: {names:?}"
