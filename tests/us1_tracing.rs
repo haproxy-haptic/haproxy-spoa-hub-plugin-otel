@@ -566,6 +566,54 @@ async fn oversized_tracestate_does_not_crash() {
     );
 }
 
+/// Regression test: every variable the plugin emits on the request-side
+/// MUST be transaction-scoped (HAProxy `txn`), not session-scoped.
+/// Session scope was the original choice but is incorrect under HTTP/2:
+/// multiple streams multiplexed on one TCP session (= HAProxy `sess`)
+/// would race on the same variable slot, so stream A could pick up
+/// stream B's correlation handle and end stream B's span as if it were
+/// stream A's. Transaction scope gives each HTTP/2 stream its own slot.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn request_emits_only_transaction_scoped_vars() {
+    use haproxy_spoa_hub_plugin_api::VarScope;
+
+    install_propagator();
+    let collector = otlp_collector::start().await;
+    let cfg = config_with_tracing(&collector.grpc_url());
+    let state = RuntimeState::build(cfg).expect("runtime state");
+
+    let req = message(
+        "on-request",
+        vec![
+            ("method", s("GET")),
+            ("path", s("/regression")),
+            ("traceparent", s("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")),
+        ],
+    );
+    let r = dispatch::dispatch(&state, &req);
+
+    assert!(!r.variables.is_empty(), "request-side dispatch produced no variables");
+    for v in r.variables.iter() {
+        assert_eq!(
+            v.scope,
+            VarScope::Transaction,
+            "var `{}` MUST be Transaction-scoped (got {:?}) — session-scoped vars race under HTTP/2 multiplexing",
+            v.name.as_str(),
+            v.scope
+        );
+    }
+
+    // Sanity: at minimum we expect correlation + traceparent_out.
+    let names: Vec<&str> = r.variables.iter().map(|v| v.name.as_str()).collect();
+    assert!(names.contains(&"correlation"), "missing `correlation`: {names:?}");
+    assert!(
+        names.iter().any(|n| n.ends_with("traceparent_out")),
+        "missing `traceparent_out`: {names:?}"
+    );
+
+    collector.shutdown();
+}
+
 /// Edge case: response-side message without `correlation` argument. (T032)
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn response_without_correlation_increments_counter() {

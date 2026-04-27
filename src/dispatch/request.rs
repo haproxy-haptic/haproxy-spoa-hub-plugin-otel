@@ -80,9 +80,14 @@ pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> Pro
             vars.extend(injector.into_vars());
 
             // Emit a correlation handle so HAProxy can round-trip it.
+            // Transaction-scoped so HTTP/2 streams multiplexed on the
+            // same TCP session (HAProxy "session") don't share the
+            // variable slot. Session-scoped would be a correctness
+            // hazard under HTTP/2: stream A could pick up stream B's
+            // correlation and end the wrong span.
             let handle = CorrelationHandle::generate();
             vars.push(TxnVariable {
-                scope: VarScope::Session,
+                scope: VarScope::Transaction,
                 name: RString::from("correlation"),
                 value: SpoeValue::String(RString::from(handle.to_hex())),
             });

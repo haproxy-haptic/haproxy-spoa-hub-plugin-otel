@@ -164,7 +164,7 @@ under a TOML key like `[plugins.params.runtime]`.
 
 A 128-bit opaque identifier, hex-encoded as a 32-character lowercase
 string. Generated at request-side message time, returned to HAProxy as
-the session-scoped variable named per the operator's TOML, and accepted
+the transaction-scoped (HAProxy `txn`) variable named per the operator's TOML, and accepted
 back as a SPOE argument on the response-side message.
 
 ### `InFlightSpan`

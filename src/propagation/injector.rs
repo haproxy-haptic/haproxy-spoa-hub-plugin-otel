@@ -40,8 +40,12 @@ impl Injector for SpoeVarsInjector {
             value
         };
         let name = format!("{}{}{}", self.prefix, key, self.suffix);
+        // Transaction-scoped: HTTP/2 streams multiplexed on the same
+        // TCP session each get their own `txn`, so the outbound
+        // TraceContext can't leak between concurrent streams. Session
+        // scope would let two parallel streams share the variable slot.
         self.vars.push(TxnVariable {
-            scope: VarScope::Session,
+            scope: VarScope::Transaction,
             name: RString::from(name),
             value: SpoeValue::String(RString::from(value)),
         });
@@ -77,6 +81,33 @@ fn truncate_tracestate(value: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentelemetry::propagation::Injector;
+
+    /// Regression test: every variable the propagator injects MUST be
+    /// transaction-scoped, not session-scoped. Under HTTP/2 multiple
+    /// streams share a single TCP session (= HAProxy `sess`), so a
+    /// session-scoped slot would let stream A's `traceparent_out`
+    /// overwrite stream B's. Transaction scope (`txn`) gives each
+    /// stream its own slot.
+    #[test]
+    fn all_injected_vars_are_transaction_scoped() {
+        let mut inj = SpoeVarsInjector::new("");
+        inj.set("traceparent", "00-aa-bb-01".to_string());
+        inj.set("tracestate", "vendor=value".to_string());
+        inj.set("baggage", "key=value".to_string());
+
+        let vars = inj.into_vars();
+        assert!(!vars.is_empty(), "injector emitted nothing");
+        for v in &vars {
+            assert_eq!(
+                v.scope,
+                VarScope::Transaction,
+                "var `{}` MUST be Transaction-scoped (got {:?}) — see commit log for the HTTP/2 multiplexing bug this guards against",
+                v.name.as_str(),
+                v.scope
+            );
+        }
+    }
 
     #[test]
     fn short_tracestate_is_unchanged() {

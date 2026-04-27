@@ -1,7 +1,7 @@
 //! Opaque 128-bit correlation handle (task T010).
 //!
 //! Generated on the request-side SPOE message and round-tripped through
-//! HAProxy as a session variable; on the response-side message it keys
+//! HAProxy as a transaction-scoped variable; on the response-side it keys
 //! the in-flight span lookup. 128 bits give a negligible collision rate
 //! within a hub instance's request window.
 

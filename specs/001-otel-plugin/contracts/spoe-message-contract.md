@@ -49,10 +49,15 @@ scope can reference it as `$arg.<name>`.
 
 | Return variable name | Scope | Description |
 | --- | --- | --- |
-| `<plugin>.correlation` | session | Opaque 32-char hex correlation handle. Operator MUST round-trip this back as the `correlation` SPOE argument on the corresponding response-side message. |
-| `<plugin>.traceparent_out` | session | New W3C `traceparent` carrying the HAProxy span as the new parent; operator applies it to the request to the backend via `http-request set-header traceparent %[var(sess.<plugin>.traceparent_out)]`. |
-| `<plugin>.tracestate_out` | session | Updated `tracestate` to forward. |
-| `<plugin>.baggage_out` | session | Updated `baggage` to forward. |
+| `<plugin>.correlation` | txn | Opaque 32-char hex correlation handle. Operator MUST round-trip this back as the `correlation` SPOE argument on the corresponding response-side message. |
+| `<plugin>.traceparent_out` | txn | New W3C `traceparent` carrying the HAProxy span as the new parent; operator applies it to the request to the backend via `http-request set-header traceparent %[var(txn.<plugin>.traceparent_out)]`. |
+| `<plugin>.tracestate_out` | txn | Updated `tracestate` to forward (truncated to 512 octets per W3C §3.3.1.3). |
+| `<plugin>.baggage_out` | txn | Updated `baggage` to forward. |
+
+All return variables use HAProxy's **transaction (`txn`) scope**, not
+session scope. Under HTTP/2 a single TCP session carries multiple
+streams; session-scoped variables would race across concurrent streams,
+so each stream gets its own `txn` slot.
 
 (`<plugin>` is the hub-assigned plugin name from `[[plugins]] name = "..."`.
 The hub auto-prefixes return-variable names with the plugin name.)
@@ -64,7 +69,7 @@ The hub auto-prefixes return-variable names with the plugin name.)
 | SPOE arg name | Type | Source | Used by |
 | --- | --- | --- | --- |
 | `_event` | string | Literal of the response-side event name | Scope dispatch |
-| `correlation` | string | `var(sess.<plugin>.correlation)` | Look up `InFlightSpan` |
+| `correlation` | string | `var(txn.<plugin>.correlation)` | Look up `InFlightSpan` |
 
 **Recommended arguments** (typical):
 
@@ -77,7 +82,7 @@ The hub auto-prefixes return-variable names with the plugin name.)
 | `srv_name` | string | `be_server` | `server.address` of selected backend |
 
 **Return variables**: none required. The plugin MAY write a
-`<plugin>.last_status` session variable for operator visibility of the
+`<plugin>.last_status` txn variable for operator visibility of the
 exported span's final status (`ok` / `error` / `unset`).
 
 ### C. `group-trigger` message — runs a named otel-group

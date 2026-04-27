@@ -96,7 +96,7 @@ use_headers = true   # read traceparent / tracestate / baggage from $arg.tracepa
 
 [plugins.params.scopes.inject]
 prefix      = ""
-use_headers = true   # write traceparent_out / tracestate_out / baggage_out as session vars
+use_headers = true   # write traceparent_out / tracestate_out / baggage_out as txn vars
 
 [[plugins.params.scopes]]
 name  = "http-response"
@@ -142,7 +142,7 @@ spoe-message otel-on-request
     event on-frontend-http-request
 
 spoe-message otel-on-response
-    args _event=str(otel-on-response) correlation=var(sess.otel.otel.correlation) \
+    args _event=str(otel-on-response) correlation=var(txn.otel.otel.correlation) \
          status=status
     event on-http-response
 ```
@@ -155,12 +155,12 @@ frontend http-in
     filter spoe engine spoa-otel config /etc/haproxy/spoe-otel.conf
 
     # Inject the new trace context into the request to the backend.
-    http-request set-header traceparent %[var(sess.otel.otel.traceparent_out)] \
-        if { var(sess.otel.otel.traceparent_out) -m found }
-    http-request set-header tracestate %[var(sess.otel.otel.tracestate_out)] \
-        if { var(sess.otel.otel.tracestate_out) -m found }
-    http-request set-header baggage %[var(sess.otel.otel.baggage_out)] \
-        if { var(sess.otel.otel.baggage_out) -m found }
+    http-request set-header traceparent %[var(txn.otel.otel.traceparent_out)] \
+        if { var(txn.otel.otel.traceparent_out) -m found }
+    http-request set-header tracestate %[var(txn.otel.otel.tracestate_out)] \
+        if { var(txn.otel.otel.tracestate_out) -m found }
+    http-request set-header baggage %[var(txn.otel.otel.baggage_out)] \
+        if { var(txn.otel.otel.baggage_out) -m found }
 
     default_backend app
 
@@ -261,8 +261,8 @@ their own spans against HAProxy):
 
 ```haproxy
 http-response set-header traceparent \
-    %[var(sess.otel.otel.traceparent_out)] \
-    if { var(sess.otel.otel.traceparent_out) -m found }
+    %[var(txn.otel.otel.traceparent_out)] \
+    if { var(txn.otel.otel.traceparent_out) -m found }
 ```
 
 **Expose just the trace ID under a custom name** (operator-friendly,
@@ -272,8 +272,8 @@ easy to grep in logs):
 # `traceparent_out` is `00-<trace_id>-<span_id>-<flags>`; field(2,-)
 # extracts the trace_id substring.
 http-response set-header X-Trace-Id \
-    %[var(sess.otel.otel.traceparent_out),field(2,-)] \
-    if { var(sess.otel.otel.traceparent_out) -m found }
+    %[var(txn.otel.otel.traceparent_out),field(2,-)] \
+    if { var(txn.otel.otel.traceparent_out) -m found }
 ```
 
 **Use the W3C Server-Timing convention** (so browsers can correlate
@@ -281,11 +281,11 @@ in DevTools without a custom header):
 
 ```haproxy
 http-response set-header Server-Timing \
-    "traceparent;desc=\"%[var(sess.otel.otel.traceparent_out)]\"" \
-    if { var(sess.otel.otel.traceparent_out) -m found }
+    "traceparent;desc=\"%[var(txn.otel.otel.traceparent_out)]\"" \
+    if { var(txn.otel.otel.traceparent_out) -m found }
 ```
 
-All three rely on the same `traceparent_out` session variable that
+All three rely on the same `traceparent_out` transaction variable that
 the request-side plugin already sets — no plugin-side change needed,
 just an extra HAProxy rule on the response phase. The `if { ... -m
 found }` guard keeps the rule a no-op for requests that bypassed the
@@ -379,7 +379,7 @@ clarification Q2 — your telemetry semantics carry over unchanged.
 | --- | --- | --- |
 | `plugin failed to load: validation error at path '...'` | TOML key path not recognised by the plugin | Cross-reference [`contracts/addon-directive-mapping.md`](./contracts/addon-directive-mapping.md) — the directive may be unsupported in v1. |
 | Spans appear without parent context even though `traceparent` is sent | The SPOE message doesn't include `traceparent` as a SPOE arg | Confirm `traceparent=req.hdr(traceparent)` is in your `spoe-message otel-on-request` definition. |
-| Spans never close | The response-side message lacks `correlation` | Confirm `correlation=var(sess.otel.otel.correlation)` is in your `spoe-message otel-on-response` and the `var-prefix` matches. |
+| Spans never close | The response-side message lacks `correlation` | Confirm `correlation=var(txn.otel.otel.correlation)` is in your `spoe-message otel-on-response` and the `var-prefix` matches. |
 | Hub log shows `correlation_missing_total` rising | Same as above, on a subset of requests | Check ACLs and route-specific filters for paths that may bypass the request-side message. |
 | `otel_pipeline_dropped_total` rising under load | Collector unable to keep up; queue overflowing | Increase `[plugins.params.tracer_pipelines.exporter.queue].max_size`, lower `scheduled_delay`, or reduce sampling ratio. |
 | `last_export_success_seconds` lagging | OTLP collector unreachable or rejecting payloads | Inspect the plugin's structured log; the failure reason is logged on every retry. |
