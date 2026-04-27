@@ -204,7 +204,96 @@ In your collector you should see one span sharing the trace ID
 new `traceparent` header whose span ID equals the HAProxy span's ID,
 so any further-instrumented service appears as a child.
 
-## 5. Plugin health and metrics
+## 5. Trace context lifecycle
+
+Three operator-facing behaviours that the wiring above implements but
+that aren't obvious from the config alone:
+
+### 5.1 No inbound `traceparent` → plugin starts a new trace
+
+The plugin's `extract` rule reads `traceparent` (and `tracestate`,
+`baggage`) from the SPOE arguments. If those arguments are missing —
+either because the client didn't send a `traceparent` header, or
+because HAProxy wasn't told to pass it via `req.hdr(traceparent)` —
+the propagator returns an empty parent context. The plugin then
+builds a **root span**: fresh 128-bit `trace_id`, fresh 64-bit
+`span_id`. The W3C TraceContext propagator serialises that into
+`traceparent_out`, which the operator's `http-request set-header
+traceparent ...` rule applies to the request that goes to the backend.
+
+The operator does not need to do anything different for this case —
+the same config covers both. There is one edge condition:
+**malformed inbound `traceparent`** (wrong shape, invalid hex, etc.)
+is treated as if the header were absent: a new root trace starts.
+This is the integration test
+`malformed_traceparent_starts_new_root_trace` in `tests/us1_tracing.rs`.
+
+### 5.2 Inbound `traceparent` exists → plugin builds a child span
+
+When `traceparent` arrives intact, the propagator extracts a
+`SpanContext` from it. The new HAProxy span is built as a **child**:
+same `trace_id`, **new** `span_id`, parent_span_id = the inbound
+span_id. Sampling decisions are inherited via the configured sampler
+(default `parent_based(trace_id_ratio_based(1.0))` — honour upstream,
+otherwise sample everything).
+
+`traceparent_out` carries the same `trace_id` with the *new* span_id,
+so when HAProxy applies `http-request set-header traceparent`, the
+backend service sees a properly-chained context. Same for
+`tracestate_out` and `baggage_out`. The integration test
+`child_span_with_traceparent_round_trip` in `tests/us1_tracing.rs`
+asserts this end-to-end.
+
+`tracestate_out` is also truncated to the W3C-mandated 512-octet cap
+(rightmost list-members dropped first); see
+`src/propagation/injector.rs::truncate_tracestate`.
+
+### 5.3 Returning the trace ID to the client
+
+By default the plugin only sets `traceparent` on the **request to the
+backend**, not on the **response back to the client**. Operators who
+want the client to see the trace ID — for log correlation,
+support-ticket workflows, or distributed-tracing UIs — do this with
+HAProxy's `http-response set-header`. Three common patterns:
+
+**Echo the full W3C traceparent** (idiomatic; lets clients chain
+their own spans against HAProxy):
+
+```haproxy
+http-response set-header traceparent \
+    %[var(sess.otel.otel.traceparent_out)] \
+    if { var(sess.otel.otel.traceparent_out) -m found }
+```
+
+**Expose just the trace ID under a custom name** (operator-friendly,
+easy to grep in logs):
+
+```haproxy
+# `traceparent_out` is `00-<trace_id>-<span_id>-<flags>`; field(2,-)
+# extracts the trace_id substring.
+http-response set-header X-Trace-Id \
+    %[var(sess.otel.otel.traceparent_out),field(2,-)] \
+    if { var(sess.otel.otel.traceparent_out) -m found }
+```
+
+**Use the W3C Server-Timing convention** (so browsers can correlate
+in DevTools without a custom header):
+
+```haproxy
+http-response set-header Server-Timing \
+    "traceparent;desc=\"%[var(sess.otel.otel.traceparent_out)]\"" \
+    if { var(sess.otel.otel.traceparent_out) -m found }
+```
+
+All three rely on the same `traceparent_out` session variable that
+the request-side plugin already sets — no plugin-side change needed,
+just an extra HAProxy rule on the response phase. The `if { ... -m
+found }` guard keeps the rule a no-op for requests that bypassed the
+SPOE filter.
+
+## 6. Plugin health and metrics
+
+
 
 The plugin exposes its own health surface (FR-020) on the hub's metrics
 endpoint:
@@ -227,7 +316,7 @@ If `dropped_total` grows or `last_export_success_seconds` falls behind,
 the plugin is the cause of an incident; that is the diagnostic workflow
 SC-008 prescribes.
 
-## 6. Adding metrics and logs
+## 7. Adding metrics and logs
 
 Once tracing is working, extend the same `[[plugins.params.scopes]]`
 blocks with `instruments` and `log_records` arrays. See
@@ -267,7 +356,7 @@ value = "$arg.duration_ms"
 bounds = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
 ```
 
-## 7. Migrating to the built-in addon when it ships
+## 8. Migrating to the built-in addon when it ships
 
 Once HAProxy's built-in OTEL addon is generally available you can
 switch by:

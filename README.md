@@ -88,6 +88,26 @@ code      = "error"
 condition = "$arg.status >= 500"
 ```
 
+## Trace context lifecycle
+
+The plugin handles all three W3C TraceContext cases automatically once
+the SPOE wiring in the quickstart is in place:
+
+- **No inbound `traceparent`** → the plugin starts a new root trace and
+  emits a fresh `traceparent_out` for the request to the backend.
+  Malformed inbound `traceparent` is treated the same way (new root).
+- **Inbound `traceparent`** → the plugin builds a child span (same
+  trace_id, new span_id) and emits the updated context as
+  `traceparent_out` / `tracestate_out` / `baggage_out`. `tracestate` is
+  truncated to W3C's 512-octet cap.
+- **Returning the trace ID to the client** → set a response header
+  with HAProxy's `http-response set-header`. The plugin doesn't do
+  this by default; the operator picks the convention they want
+  (echoed `traceparent`, custom `X-Trace-Id`, or `Server-Timing`).
+
+See [`specs/001-otel-plugin/quickstart.md`](./specs/001-otel-plugin/quickstart.md#5-trace-context-lifecycle)
+§5 for the full HAProxy snippets.
+
 ## TLS for OTLP exporters
 
 Each pipeline's exporter supports TLS with a per-pipeline trust store:
