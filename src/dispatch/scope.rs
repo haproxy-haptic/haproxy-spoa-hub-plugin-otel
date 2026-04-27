@@ -124,7 +124,7 @@ pub fn emit_log_records(
 fn emit_one_log(
     rule: &LogRecordRule,
     message: &SpoeMessage,
-    provider: &opentelemetry_sdk::logs::LoggerProvider,
+    provider: &opentelemetry_sdk::logs::SdkLoggerProvider,
     active_context: Option<&opentelemetry::Context>,
 ) {
     let logger = provider.logger("otel-plugin");

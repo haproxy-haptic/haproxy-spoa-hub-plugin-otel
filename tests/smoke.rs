@@ -10,8 +10,7 @@ use opentelemetry::KeyValue;
 use opentelemetry::trace::{Span, Tracer, TracerProvider as _};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::runtime;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collector_records_an_exported_span() {
@@ -24,9 +23,13 @@ async fn collector_records_an_exported_span() {
         .build()
         .expect("build span exporter");
 
-    let provider = TracerProvider::builder()
-        .with_resource(Resource::new(vec![KeyValue::new("service.name", "smoke")]))
-        .with_batch_exporter(exporter, runtime::Tokio)
+    let provider = SdkTracerProvider::builder()
+        .with_resource(
+            Resource::builder()
+                .with_attributes(vec![KeyValue::new("service.name", "smoke")])
+                .build(),
+        )
+        .with_batch_exporter(exporter)
         .build();
 
     let tracer = provider.tracer("smoke");

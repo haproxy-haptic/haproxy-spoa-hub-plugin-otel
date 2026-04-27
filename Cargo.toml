@@ -14,9 +14,9 @@ haproxy-spoa-hub-plugin-api = "0.2"
 abi_stable = "0.11"
 
 # OpenTelemetry — see specs/001-otel-plugin/research.md for selection rationale.
-opentelemetry = "0.27"
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.27", default-features = false, features = [
+opentelemetry = "0.31"
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "grpc-tonic",
     "http-proto",
     "http-json",
@@ -26,10 +26,14 @@ opentelemetry-otlp = { version = "0.27", default-features = false, features = [
     "trace",
     "metrics",
     "logs",
-    "reqwest-client",
+    # Canonical HTTP client per upstream design (PR open-telemetry/opentelemetry-rust#2516,
+    # 0.28 CHANGELOG): the default PeriodicReader / Batch{Span,Log}Processor run on
+    # dedicated OS threads with no tokio runtime, so only `grpc-tonic` and
+    # `reqwest-blocking-client` are supported — async `reqwest`/`hyper` are not.
+    "reqwest-blocking-client",
     "reqwest-rustls",
 ] }
-opentelemetry-semantic-conventions = "0.27"
+opentelemetry-semantic-conventions = "0.31"
 
 # Async runtime — version-aligned with the hub.
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
@@ -48,8 +52,9 @@ dashmap = "6"
 # Atomic config swap for SIGHUP reload (research item R7).
 arc-swap = "1"
 
-# Used for OTLP/gRPC custom metadata headers (FR-013).
-tonic = { version = "0.12", default-features = false, features = ["transport"] }
+# Used for OTLP/gRPC custom metadata headers (FR-013). Pinned to the
+# version opentelemetry-otlp depends on so the MetadataMap types match.
+tonic = { version = "0.14", default-features = false, features = ["transport"] }
 
 # Logging (the hub installs a tracing-subscriber bridge).
 log = "0.4"
@@ -65,11 +70,11 @@ hex = "0.4"
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 serde_json = "1"
-tonic = "0.12"
-prost = "0.13"
+tonic = "0.14"
+prost = "0.14"
 hyper = { version = "1", features = ["full"] }
 axum = "0.8"
-opentelemetry-proto = { version = "0.27", features = ["gen-tonic", "trace", "metrics", "logs", "with-serde"] }
+opentelemetry-proto = { version = "0.31", features = ["gen-tonic", "trace", "metrics", "logs", "with-serde"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "test-util"] }
 tower = "0.5"

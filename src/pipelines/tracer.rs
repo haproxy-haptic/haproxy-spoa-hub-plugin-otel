@@ -7,21 +7,21 @@ use opentelemetry_otlp::{
     WithHttpConfig, WithTonicConfig,
 };
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::trace::{Sampler as SdkSampler, TracerProvider};
+use opentelemetry_sdk::trace::{Sampler as SdkSampler, SdkTracerProvider};
 use std::sync::Arc;
 
-/// Build a `TracerProvider` for one tracer pipeline.
+/// Build an `SdkTracerProvider` for one tracer pipeline.
 pub fn build(
     pipeline: &TracerPipeline,
-) -> Result<Arc<TracerProvider>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Arc<SdkTracerProvider>, Box<dyn std::error::Error + Send + Sync>> {
     let exporter = build_exporter(&pipeline.exporter, &pipeline.exporter.protocol)?;
     let sampler = build_sampler(&pipeline.sampler);
     let resource = build_resource(&pipeline.resource);
 
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_resource(resource)
         .with_sampler(sampler)
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_batch_exporter(exporter)
         .build();
 
     Ok(Arc::new(provider))
@@ -55,7 +55,7 @@ pub fn build_resource(kvs: &std::collections::BTreeMap<String, serde_json::Value
             _ => None,
         })
         .collect();
-    Resource::new(pairs)
+    Resource::builder().with_attributes(pairs).build()
 }
 
 fn build_exporter(

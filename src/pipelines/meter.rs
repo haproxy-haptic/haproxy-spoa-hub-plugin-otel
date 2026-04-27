@@ -5,7 +5,6 @@ use opentelemetry_otlp::{
     MetricExporter, Protocol as OtlpProtocol, WithExportConfig, WithHttpConfig,
 };
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
-use opentelemetry_sdk::runtime;
 use std::sync::Arc;
 
 /// Build an `SdkMeterProvider` for one meter pipeline.
@@ -13,9 +12,11 @@ pub fn build(
     pipeline: &MeterPipeline,
 ) -> Result<Arc<SdkMeterProvider>, Box<dyn std::error::Error + Send + Sync>> {
     let exporter = build_exporter(pipeline)?;
-    let reader = PeriodicReader::builder(exporter, runtime::Tokio)
+    // Since 0.28 PeriodicReader spawns its own OS thread instead of
+    // requiring an async runtime arg, and timeout is enforced by the
+    // exporter rather than the reader.
+    let reader = PeriodicReader::builder(exporter)
         .with_interval(pipeline.reader.interval)
-        .with_timeout(pipeline.reader.timeout)
         .build();
     let resource = super::tracer::build_resource(&pipeline.resource);
     let provider = SdkMeterProvider::builder()
