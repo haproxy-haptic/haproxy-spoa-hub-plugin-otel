@@ -8,9 +8,9 @@ pub mod meter;
 pub mod tracer;
 
 use crate::config::PluginConfig;
-use opentelemetry_sdk::logs::LoggerProvider;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -19,9 +19,9 @@ use std::sync::Arc;
 /// reload until the last in-flight span finishes (research item R7).
 #[derive(Default)]
 pub struct PipelineSet {
-    pub tracers: BTreeMap<String, Arc<TracerProvider>>,
+    pub tracers: BTreeMap<String, Arc<SdkTracerProvider>>,
     pub meters: BTreeMap<String, Arc<SdkMeterProvider>>,
-    pub loggers: BTreeMap<String, Arc<LoggerProvider>>,
+    pub loggers: BTreeMap<String, Arc<SdkLoggerProvider>>,
 }
 
 impl PipelineSet {
@@ -50,7 +50,7 @@ impl PipelineSet {
 
     /// Resolve a tracer pipeline by name, falling back to "default" when
     /// the spec does not explicitly name one.
-    pub fn tracer_or_default(&self, name: Option<&str>) -> Option<&Arc<TracerProvider>> {
+    pub fn tracer_or_default(&self, name: Option<&str>) -> Option<&Arc<SdkTracerProvider>> {
         let key = name.unwrap_or("default");
         self.tracers
             .get(key)
@@ -68,7 +68,7 @@ impl PipelineSet {
     }
 
     /// Resolve a logger pipeline by name with the same fallback policy.
-    pub fn logger_or_default(&self, name: Option<&str>) -> Option<&Arc<LoggerProvider>> {
+    pub fn logger_or_default(&self, name: Option<&str>) -> Option<&Arc<SdkLoggerProvider>> {
         let key = name.unwrap_or("default");
         self.loggers
             .get(key)
@@ -76,13 +76,13 @@ impl PipelineSet {
             .or_else(|| self.loggers.values().next())
     }
 
-    pub fn tracer(&self, name: &str) -> Option<&Arc<TracerProvider>> {
+    pub fn tracer(&self, name: &str) -> Option<&Arc<SdkTracerProvider>> {
         self.tracers.get(name)
     }
     pub fn meter(&self, name: &str) -> Option<&Arc<SdkMeterProvider>> {
         self.meters.get(name)
     }
-    pub fn logger(&self, name: &str) -> Option<&Arc<LoggerProvider>> {
+    pub fn logger(&self, name: &str) -> Option<&Arc<SdkLoggerProvider>> {
         self.loggers.get(name)
     }
 

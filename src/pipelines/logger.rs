@@ -2,19 +2,18 @@
 
 use crate::config::{LoggerPipeline, Protocol};
 use opentelemetry_otlp::{LogExporter, Protocol as OtlpProtocol, WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::logs::LoggerProvider;
-use opentelemetry_sdk::runtime;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use std::sync::Arc;
 
-/// Build a `LoggerProvider` for one logger pipeline.
+/// Build an `SdkLoggerProvider` for one logger pipeline.
 pub fn build(
     pipeline: &LoggerPipeline,
-) -> Result<Arc<LoggerProvider>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Arc<SdkLoggerProvider>, Box<dyn std::error::Error + Send + Sync>> {
     let exporter = build_exporter(pipeline)?;
     let resource = super::tracer::build_resource(&pipeline.resource);
-    let provider = LoggerProvider::builder()
+    let provider = SdkLoggerProvider::builder()
         .with_resource(resource)
-        .with_batch_exporter(exporter, runtime::Tokio)
+        .with_batch_exporter(exporter)
         .build();
     Ok(Arc::new(provider))
 }
