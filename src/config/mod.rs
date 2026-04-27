@@ -129,9 +129,12 @@ impl PluginConfig {
     /// Build directly from a TOML string. Used by tests and by operator
     /// translation tooling. Production builds from `PluginContext`.
     pub fn from_toml(text: &str) -> Result<Self, ConfigError> {
-        let toml: toml::Value = text
-            .parse()
-            .map_err(|e: toml::de::Error| ConfigError::Toml {
+        // `text.parse::<toml::Value>()` parses a single TOML value in
+        // toml v1+ (just the table header in `[instrumentation]\n...`),
+        // which is not what we want. `toml::from_str` parses a full
+        // TOML document.
+        let toml: toml::Value =
+            toml::from_str(text).map_err(|e: toml::de::Error| ConfigError::Toml {
                 message: e.to_string(),
             })?;
         let json = toml_to_json(toml);
