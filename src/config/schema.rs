@@ -25,7 +25,7 @@ pub fn validate(value: &serde_json::Value) -> Result<(), ConfigError> {
 
     if let Err(error) = validator.validate(value) {
         return Err(ConfigError::Schema {
-            key_path: error.instance_path.to_string(),
+            key_path: error.instance_path().to_string(),
             message: error.to_string(),
         });
     }
