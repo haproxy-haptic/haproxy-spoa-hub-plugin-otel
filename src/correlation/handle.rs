@@ -5,7 +5,7 @@
 //! the in-flight span lookup. 128 bits give a negligible collision rate
 //! within a hub instance's request window.
 
-use rand::RngCore;
+use rand::Rng;
 use std::fmt;
 use std::str::FromStr;
 
@@ -17,7 +17,7 @@ impl CorrelationHandle {
     #[must_use]
     pub fn generate() -> Self {
         let mut bytes = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill_bytes(&mut bytes);
         Self(bytes)
     }
 

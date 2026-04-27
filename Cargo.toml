@@ -64,7 +64,7 @@ thiserror = "2"
 anyhow = "1"
 
 # Random handles.
-rand = "0.8"
+rand = "0.10"
 hex = "0.4"
 
 [dev-dependencies]
