@@ -4,6 +4,10 @@
 
 - Write access to the repository
 - `glab` CLI authenticated, or ability to push tags
+- **Generic packages "Reject duplicates" enabled** under
+  Settings > Packages and Registries > Generic packages. Without this, a
+  re-run of the release pipeline on the same tag silently overwrites the
+  bytes uploaded earlier.
 
 ## Steps
 
@@ -40,9 +44,29 @@
    Tags must match the pattern `v*` (e.g., `v0.1.0`, `v1.0.0-beta.1`).
 
 5. **CI handles the rest**: The `release` job in `.gitlab-ci.yml` automatically:
-   - Builds the release `.so` artifact for `amd64`, `arm64`, and `armv7` (glibc 2.36)
+   - Cross-compiles the plugin `.so` for `amd64`, `arm64`, and `armv7` (glibc
+     2.36) with `cargo auditable` (binaries embed a compressed
+     `Cargo.lock`-equivalent so SBOM tools can enumerate Rust deps without
+     source access)
+   - Generates per-file `.sha256` sidecars and a combined `SHA256SUMS`
+   - Cosign keyless-signs every `.so` using the GitLab OIDC id token,
+     producing `.cosign.bundle` files
+   - Uploads everything to the Generic Package Registry under
+     `packages/generic/otel/<tag>/`
    - Extracts the matching changelog section as release notes
-   - Creates a GitLab release with the three architecture artifacts attached as links
+   - Creates a GitLab release with all artifacts linked as release assets
+
+## Verifying a release
+
+After CI finishes, verify the release end-to-end from a clean machine:
+
+```sh
+make verify-release VERSION=v0.1.1
+```
+
+This downloads `SHA256SUMS`, every artifact named in it, and every artifact's
+cosign bundle from the package registry, then runs `sha256sum -c` and
+`cosign verify-blob` against the project's tag identity.
 
 ## Versioning
 
