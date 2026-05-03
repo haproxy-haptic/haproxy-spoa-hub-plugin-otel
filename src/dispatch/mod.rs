@@ -12,6 +12,7 @@ use crate::pipelines::PipelineSet;
 use haproxy_spoa_hub_plugin_api::{ProcessingResult, SpoeMessage};
 use std::sync::Arc;
 
+pub mod overrides;
 mod request;
 mod response;
 mod scope;
@@ -19,6 +20,8 @@ mod scope;
 /// Reserved SPOE argument names (see contracts/spoe-message-contract.md).
 pub const ARG_EVENT: &str = "_event";
 pub const ARG_CORRELATION: &str = "correlation";
+
+pub use overrides::{ARG_ROOT, ARG_SAMPLE, OverrideResolution, SampleDecision};
 
 /// Active runtime state. `ArcSwap` holds the current value; reload
 /// installs a new state without disturbing in-flight spans (research R7).

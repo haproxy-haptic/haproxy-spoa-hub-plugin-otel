@@ -25,6 +25,8 @@ of configured `Scope` blocks.
 | SPOE arg name | Type | Source (HAProxy fetch) | Used by |
 | --- | --- | --- | --- |
 | `_event` | string | Literal of the operator-chosen event name | Scope dispatch |
+| `_root` | string (`"true"` \| `"false"`) | Literal or `var(txn.<n>)` from a per-route map | Per-message override of the scope's `Scope.spans[].root` setting. Per-message wins over per-scope default. Malformed values fail open (override ignored, `malformed_override_total` counter increments). See `specs/002-trust-incoming-span/`. |
+| `_sample` | string (`"default"` \| `"record"` \| `"drop"`) | Literal or `var(txn.<n>)` from a per-route map | Per-message override of the configured sampler. `record` forces export, `drop` constructs a non-recording span (correlation handle and `traceparent_out` with W3C unsampled flag still emitted), `default` defers to the sampler. Malformed values fail open. See `specs/002-trust-incoming-span/`. |
 
 **Recommended arguments** (any subset; consumed by attribute / instrument / log rules that reference them as `$arg.<name>`):
 
