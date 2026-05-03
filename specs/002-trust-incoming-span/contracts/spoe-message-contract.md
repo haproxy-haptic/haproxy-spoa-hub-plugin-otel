@@ -12,7 +12,7 @@ The base contract reserves `_event` for scope dispatch. This feature adds two mo
 | --- | --- | --- | --- |
 | `_event` | string | operator-defined event name | (unchanged — base contract) Scope dispatch. |
 | `_root` | string | `"true"` \| `"false"` | Per-message override of the active scope's `Scope.spans[].root` setting. Present-and-parseable wins over the per-scope default for this transaction only. |
-| `_sample` | string | `"default"` \| `"record"` \| `"drop"` | Per-message override of the configured sampler's decision. `record` forces span emission and export regardless of the sampler. `drop` skips span emission and correlation allocation entirely. `default` (or absent) defers to the configured sampler. |
+| `_sample` | string | `"default"` \| `"record"` \| `"drop"` | Per-message override of the configured sampler's decision. `record` forces span emission and export regardless of the sampler. `drop` constructs a non-recording span (via the SDK's `SamplingDecision::Drop` path) so a `SpanContext` and correlation handle still exist for downstream propagation and response-side closure, but the span is not exported. `default` (or absent) defers to the configured sampler. |
 
 ### Rules common to `_root` and `_sample`
 
@@ -26,16 +26,16 @@ The base contract reserves `_event` for scope dispatch. This feature adds two mo
 | `_root` | `_sample` | Effect |
 | --- | --- | --- |
 | absent | absent | (current behaviour) Scope's `root` decides parent context; configured sampler decides export. |
-| `"true"` | absent / `"default"` | Fresh root context; sampler decides export. `traceparent_out` carries the new root trace ID. |
+| `"true"` | absent / `"default"` | Fresh root context; sampler decides export. `traceparent_out` carries the new root trace ID with the sampler-chosen flags. |
 | `"false"` | absent / `"default"` | Inbound `traceparent` extracted as parent (explicit form of default; no-op when scope's `root` is already false). |
 | absent | `"record"` | Scope's `root` decides parent context; span is created and exported regardless of sampler. |
-| absent | `"drop"` | No span created, no correlation handle allocated. Instruments and log records still fire. `traceparent_out`, `tracestate_out`, `baggage_out` are NOT emitted (no span context to inject). |
-| `"true"` | `"drop"` | Fresh root context computed; no span exported. `traceparent_out` carries the synthetic new root trace ID so downstream services see a coherent trace identity for this request even though HAProxy's local span was dropped. |
+| absent | `"drop"` | Non-recording span constructed; not exported. Correlation handle allocated as normal. `traceparent_out` carries the local span's trace ID and span ID with the W3C unsampled flag (`flags = 00`). Instruments and log records still fire. |
+| `"true"` | `"drop"` | Fresh root non-recording span. `traceparent_out` carries the new root trace ID with the W3C unsampled flag, so downstream services see a fresh, non-sampled trace context. |
 | `"true"` | `"record"` | Fresh root context; span created and exported regardless of sampler. |
 | malformed | * | Override ignored, scope default applies; metrics/logs per the resolved `_sample` value. Counter increments. |
 | * | malformed | Override ignored, sampler decides; metrics/logs as configured. Counter increments. |
 
-The "force fresh-root + drop span + inject context" combination is intentional: it lets HAPTIC operators say "for this Ingress, sever the inbound trace at the edge but still give downstreams a fresh trace ID so their own spans link together". Removing the synthetic context injection in that combination would force the operator to use an alternative propagator (or accept un-traced downstreams), which defeats the point of running otel at the ingress.
+The decision to keep the correlation handle and the `traceparent_out` injection on `_sample = drop` is deliberate. Three reasons: (1) downstream services receive a coherent W3C-correct trace identity (with the unsampled flag), so their own spans can still link together for the request even though HAProxy's local span was dropped; (2) the response-side handler closes the non-recording span by the same code path as a recording span, so dropping a span never inflates the `correlation_missing_total` counter; (3) the SDK's `SamplingDecision::Drop` path is already a constant-time no-op for export, so the optimisation of "skip span creation entirely" buys nothing measurable.
 
 ### Backward compatibility
 
