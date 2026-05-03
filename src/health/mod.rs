@@ -44,6 +44,19 @@ pub struct HealthRegistry {
     config_reload_total: AtomicU64,
     config_reload_failures_total: AtomicU64,
     pipelines: dashmap::DashMap<PipelineKey, PipelineHealth>,
+    /// Per-(arg, scope) counter of malformed `_root` / `_sample` SPOE
+    /// arguments seen on request-side messages. The malformed value
+    /// itself is NOT used as a label key — it would be an
+    /// attacker-controlled high-cardinality dimension.
+    malformed_override: dashmap::DashMap<MalformedOverrideKey, AtomicU64>,
+}
+
+/// Label tuple for `malformed_override`. `arg_name` is one of `_root`,
+/// `_sample`; `scope_name` is the active scope's name.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct MalformedOverrideKey {
+    pub arg_name: String,
+    pub scope_name: String,
 }
 
 #[derive(Default)]
@@ -67,6 +80,7 @@ impl HealthRegistry {
             config_reload_total: AtomicU64::new(0),
             config_reload_failures_total: AtomicU64::new(0),
             pipelines: dashmap::DashMap::new(),
+            malformed_override: dashmap::DashMap::new(),
         })
     }
 
@@ -86,6 +100,21 @@ impl HealthRegistry {
 
     pub fn correlation_missing_inc(&self) {
         self.correlation_missing_total
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record one malformed `_root` or `_sample` SPOE argument seen on
+    /// the request-side message of `scope_name`. Counter is labelled by
+    /// (arg_name, scope_name); the malformed value itself is NOT a
+    /// label (high-cardinality / attacker-controlled).
+    pub fn malformed_override_inc(&self, arg_name: &str, scope_name: &str) {
+        let key = MalformedOverrideKey {
+            arg_name: arg_name.to_string(),
+            scope_name: scope_name.to_string(),
+        };
+        self.malformed_override
+            .entry(key)
+            .or_insert_with(|| AtomicU64::new(0))
             .fetch_add(1, Ordering::Relaxed);
     }
 
@@ -127,6 +156,17 @@ impl HealthRegistry {
                 )
             })
             .collect();
+        let malformed_override_total = self
+            .malformed_override
+            .iter()
+            .map(|e| {
+                let k = e.key();
+                (
+                    (k.arg_name.clone(), k.scope_name.clone()),
+                    e.value().load(Ordering::Relaxed),
+                )
+            })
+            .collect();
         HealthSnapshot {
             in_flight_transactions: self.in_flight_transactions.load(Ordering::Relaxed),
             correlation_evictions_ttl: self.correlation_evictions_ttl.load(Ordering::Relaxed),
@@ -138,6 +178,7 @@ impl HealthRegistry {
             config_reload_total: self.config_reload_total.load(Ordering::Relaxed),
             config_reload_failures_total: self.config_reload_failures_total.load(Ordering::Relaxed),
             pipelines,
+            malformed_override_total,
         }
     }
 }
@@ -152,6 +193,9 @@ pub struct HealthSnapshot {
     pub config_reload_total: u64,
     pub config_reload_failures_total: u64,
     pub pipelines: std::collections::HashMap<PipelineKey, PipelineSnapshot>,
+    /// Malformed `_root` / `_sample` override counts, keyed by
+    /// `(arg_name, scope_name)`.
+    pub malformed_override_total: std::collections::HashMap<(String, String), u64>,
 }
 
 #[derive(Debug, Clone)]

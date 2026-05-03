@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Per-message override of `Scope.spans[].root` and the configured sampler
+  decision via two new request-side reserved SPOE arguments. `_root`
+  takes `"true"` or `"false"` and overrides the per-scope `root` setting
+  for one transaction; `_sample` takes `"default"`, `"record"`, or
+  `"drop"` and short-circuits the sampler. Malformed values fail open
+  and are counted in a new `malformed_override_total` gauge labelled by
+  `(arg_name, scope_name)`. Spec at `specs/002-trust-incoming-span/`.
+
 ## [0.1.1] - 2026-04-28
 
 ### Added

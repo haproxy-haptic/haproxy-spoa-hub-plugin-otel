@@ -1,7 +1,12 @@
 //! Request-side SPOE message handler (tasks T027, T029, T031).
+//!
+//! Per-message overrides of the per-scope `root` setting and the
+//! configured sampler decision live in `super::overrides`; see
+//! `specs/002-trust-incoming-span/spec.md`.
 
 use crate::config::{Scope, StatusCode};
 use crate::correlation::{CorrelationHandle, InFlightSpan};
+use crate::dispatch::overrides::{OverrideResolution, SampleDecision};
 use crate::dispatch::{RuntimeState, scope as scope_mod};
 use crate::propagation::{SpoeArgsExtractor, SpoeVarsInjector};
 use abi_stable::std_types::RString;
@@ -10,7 +15,8 @@ use haproxy_spoa_hub_plugin_api::{
 };
 use opentelemetry::Context;
 use opentelemetry::trace::{
-    Span, SpanBuilder, SpanKind, Status, TraceContextExt, Tracer, TracerProvider as _,
+    SamplingDecision, SamplingResult, Span, SpanBuilder, SpanKind, Status, TraceContextExt,
+    TraceState, Tracer, TracerProvider as _,
 };
 
 pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> ProcessingResult {
@@ -30,12 +36,21 @@ pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> Pro
     // tracer pipeline is available. Metric-only / log-only scopes skip
     // this entire block and just emit instruments / log records below.
     if let Some(span_rule) = scope.spans.first() {
+        // Resolve per-message overrides once per request. Folds the
+        // scope's TOML defaults against `_root` and `_sample` SPOE args,
+        // counting any malformed values into the health registry.
+        let resolution =
+            OverrideResolution::resolve(message, span_rule.root, &scope.name, &state.health);
+
         let pipeline_name = span_rule.tracer_pipeline.as_deref();
         if let Some(provider) = state.pipelines.tracer_or_default(pipeline_name) {
             let tracer = provider.tracer(state.config.instrumentation.name.clone());
-            let builder =
+            let mut builder =
                 SpanBuilder::from_name(span_rule.name.clone()).with_kind(SpanKind::Server);
-            let active_context = if span_rule.root {
+            if let Some(forced) = forced_sampling_result(resolution.sample_decision) {
+                builder = builder.with_sampling_result(forced);
+            }
+            let active_context = if resolution.effective_root {
                 Context::new()
             } else {
                 parent_context.clone()
@@ -102,9 +117,27 @@ pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> Pro
 
     // Emit instruments and log records regardless of whether a span was
     // opened — these are independent telemetry types and should fire on
-    // metric-only / log-only scopes too.
+    // metric-only / log-only scopes too. Also independent of any
+    // `_sample` override: dropping a span never silences metrics or logs.
     scope_mod::emit_instruments(state, scope, message);
     scope_mod::emit_log_records(state, scope, message, None);
 
     ProcessingResult::from_vars(vars)
+}
+
+/// Translate a per-message `SampleDecision` into a `SamplingResult` that
+/// `SpanBuilder::with_sampling_result` will short-circuit the configured
+/// sampler with. Returns `None` when no override is requested (the SDK
+/// then calls the configured sampler as usual). Spec §FR-002.
+fn forced_sampling_result(decision: SampleDecision) -> Option<SamplingResult> {
+    let sampling_decision = match decision {
+        SampleDecision::UseSampler => return None,
+        SampleDecision::ForceRecord => SamplingDecision::RecordAndSample,
+        SampleDecision::ForceDrop => SamplingDecision::Drop,
+    };
+    Some(SamplingResult {
+        decision: sampling_decision,
+        attributes: Vec::new(),
+        trace_state: TraceState::default(),
+    })
 }
