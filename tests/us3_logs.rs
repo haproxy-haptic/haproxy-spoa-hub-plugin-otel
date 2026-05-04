@@ -2,8 +2,8 @@
 
 mod common;
 
-use abi_stable::std_types::{RHashMap, RString};
 use common::otlp_collector;
+use haproxy_spoa_hub_plugin_api::{RHashMap, RString};
 use haproxy_spoa_hub_plugin_api::{SpoeMessage, SpoeValue};
 use otel_plugin::config::PluginConfig;
 use otel_plugin::dispatch::{self, RuntimeState};

@@ -2,8 +2,8 @@
 
 mod common;
 
-use abi_stable::std_types::{RHashMap, RString};
 use common::otlp_collector;
+use haproxy_spoa_hub_plugin_api::{RHashMap, RString};
 use haproxy_spoa_hub_plugin_api::{SpoeMessage, SpoeValue};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data as MetricData;
 use opentelemetry_proto::tonic::metrics::v1::number_data_point::Value as DPValue;

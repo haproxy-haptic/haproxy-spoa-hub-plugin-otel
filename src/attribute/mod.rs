@@ -96,7 +96,7 @@ fn stringify(v: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use abi_stable::std_types::RString;
+    use haproxy_spoa_hub_plugin_api::RString;
 
     #[test]
     fn natural_string() {

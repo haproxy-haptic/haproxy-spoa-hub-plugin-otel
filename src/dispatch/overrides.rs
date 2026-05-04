@@ -116,7 +116,7 @@ fn truncate(s: &str, n: usize) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use abi_stable::std_types::{RHashMap, RString};
+    use haproxy_spoa_hub_plugin_api::{RHashMap, RString};
     use haproxy_spoa_hub_plugin_api::{SpoeMessage, SpoeValue};
 
     fn msg_with(args: &[(&str, &str)]) -> SpoeMessage {

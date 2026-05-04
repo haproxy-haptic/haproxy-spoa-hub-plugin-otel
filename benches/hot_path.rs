@@ -15,8 +15,8 @@
 //! costs dominate the absolute number; the plugin's contribution is
 //! measured here.
 
-use abi_stable::std_types::{RHashMap, RString};
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use haproxy_spoa_hub_plugin_api::{RHashMap, RString};
 use haproxy_spoa_hub_plugin_api::{SpoeMessage, SpoeValue};
 use otel_plugin::config::PluginConfig;
 use otel_plugin::dispatch::{self, RuntimeState};
