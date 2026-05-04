@@ -173,9 +173,12 @@ impl PluginConfig {
 }
 
 fn config_table_to_json(
-    table: &abi_stable::std_types::RHashMap<abi_stable::std_types::RString, ConfigValue>,
+    table: &haproxy_spoa_hub_plugin_api::RHashMap<
+        haproxy_spoa_hub_plugin_api::RString,
+        ConfigValue,
+    >,
 ) -> serde_json::Value {
-    use abi_stable::std_types::Tuple2;
+    use haproxy_spoa_hub_plugin_api::Tuple2;
     let mut map = serde_json::Map::with_capacity(table.len());
     for Tuple2(k, v) in table.iter() {
         map.insert(k.as_str().to_string(), config_value_to_json(v));
@@ -192,7 +195,7 @@ fn config_value_to_json(v: &ConfigValue) -> serde_json::Value {
         ConfigValue::Bool(b) => J::Bool(*b),
         ConfigValue::Array(a) => J::Array(a.iter().map(config_value_to_json).collect()),
         ConfigValue::Table(t) => {
-            use abi_stable::std_types::Tuple2;
+            use haproxy_spoa_hub_plugin_api::Tuple2;
             let mut m = serde_json::Map::with_capacity(t.len());
             for Tuple2(k, v) in t.iter() {
                 m.insert(k.as_str().to_string(), config_value_to_json(v));

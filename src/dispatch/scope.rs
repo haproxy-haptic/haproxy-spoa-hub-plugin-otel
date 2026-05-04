@@ -7,7 +7,7 @@ use crate::config::{
     AttributeRule, InstrumentKind, InstrumentRule, LogRecordRule, Scope, ScopeKind, SeverityNumber,
     ValueSource,
 };
-use abi_stable::std_types::RString;
+use haproxy_spoa_hub_plugin_api::RString;
 use haproxy_spoa_hub_plugin_api::{ProcessingResult, SpoeMessage, SpoeValue};
 use opentelemetry::KeyValue;
 use opentelemetry::logs::{AnyValue, LogRecord, Logger, LoggerProvider, Severity};

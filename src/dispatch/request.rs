@@ -9,7 +9,7 @@ use crate::correlation::{CorrelationHandle, InFlightSpan};
 use crate::dispatch::overrides::{OverrideResolution, SampleDecision};
 use crate::dispatch::{RuntimeState, scope as scope_mod};
 use crate::propagation::{SpoeArgsExtractor, SpoeVarsInjector};
-use abi_stable::std_types::RString;
+use haproxy_spoa_hub_plugin_api::RString;
 use haproxy_spoa_hub_plugin_api::{
     ProcessingResult, SpoeMessage, SpoeValue, TxnVariable, VarScope,
 };

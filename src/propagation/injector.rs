@@ -1,6 +1,6 @@
 //! Inject outbound W3C TraceContext / Baggage as SPOE return variables.
 
-use abi_stable::std_types::RString;
+use haproxy_spoa_hub_plugin_api::RString;
 use haproxy_spoa_hub_plugin_api::{SpoeValue, TxnVariable, VarScope};
 use opentelemetry::propagation::Injector;
 

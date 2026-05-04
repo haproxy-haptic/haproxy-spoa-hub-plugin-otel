@@ -7,9 +7,9 @@
 
 mod common;
 
-use abi_stable::std_types::{RHashMap, RString, RVec};
 use common::otlp_collector;
 use haproxy_spoa_hub_plugin_api::{ProcessingResult, SpoeMessage, SpoeValue};
+use haproxy_spoa_hub_plugin_api::{RHashMap, RString, RVec};
 use opentelemetry_proto::tonic::common::v1::any_value::Value as OtelValueProto;
 use otel_plugin::config::PluginConfig;
 use otel_plugin::dispatch::{self, RuntimeState};
