@@ -5,6 +5,7 @@
 
 pub mod logger;
 pub mod meter;
+pub mod sampler;
 pub mod tracer;
 
 use crate::config::PluginConfig;
