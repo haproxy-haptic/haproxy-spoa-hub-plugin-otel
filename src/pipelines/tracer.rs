@@ -1,6 +1,7 @@
 //! Tracer pipeline construction (task T025).
 
 use crate::config::{Compression, Exporter as ExporterCfg, Protocol, Sampler, TracerPipeline};
+use crate::pipelines::sampler::ForcingSampler;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::{
     Compression as OtlpCompression, Protocol as OtlpProtocol, SpanExporter, WithExportConfig,
@@ -15,7 +16,11 @@ pub fn build(
     pipeline: &TracerPipeline,
 ) -> Result<Arc<SdkTracerProvider>, Box<dyn std::error::Error + Send + Sync>> {
     let exporter = build_exporter(&pipeline.exporter, &pipeline.exporter.protocol)?;
-    let sampler = build_sampler(&pipeline.sampler);
+    // Wrap the configured sampler so per-message `_sample` overrides
+    // can short-circuit it via Context (opentelemetry-rust 0.32
+    // removed `SpanBuilder::with_sampling_result`). See
+    // `pipelines/sampler.rs` for the migration rationale.
+    let sampler = ForcingSampler::new(build_sampler(&pipeline.sampler));
     let resource = build_resource(&pipeline.resource);
 
     let provider = SdkTracerProvider::builder()

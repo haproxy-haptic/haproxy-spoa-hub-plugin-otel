@@ -15,9 +15,9 @@ crate-type = ["cdylib", "rlib"]
 haproxy-spoa-hub-plugin-api = "0.5"
 
 # OpenTelemetry — see specs/001-otel-plugin/research.md for selection rationale.
-opentelemetry = "0.31"
-opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.31", default-features = false, features = [
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
     "grpc-tonic",
     "http-proto",
     "http-json",
@@ -34,7 +34,7 @@ opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "reqwest-blocking-client",
     "reqwest-rustls",
 ] }
-opentelemetry-semantic-conventions = "0.31"
+opentelemetry-semantic-conventions = "0.32"
 
 # Async runtime — version-aligned with the hub.
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
@@ -75,7 +75,7 @@ tonic = "0.14"
 prost = "0.14"
 hyper = { version = "1", features = ["full"] }
 axum = "0.8"
-opentelemetry-proto = { version = "0.31", features = ["gen-tonic", "trace", "metrics", "logs", "with-serde"] }
+opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "trace", "metrics", "logs", "with-serde"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "test-util"] }
 tower = "0.5"

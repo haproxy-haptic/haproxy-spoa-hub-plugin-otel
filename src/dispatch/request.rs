@@ -8,6 +8,7 @@ use crate::config::{Scope, StatusCode};
 use crate::correlation::{CorrelationHandle, InFlightSpan};
 use crate::dispatch::overrides::{OverrideResolution, SampleDecision};
 use crate::dispatch::{RuntimeState, scope as scope_mod};
+use crate::pipelines::sampler::ForceSampling;
 use crate::propagation::{SpoeArgsExtractor, SpoeVarsInjector};
 use haproxy_spoa_hub_plugin_api::RString;
 use haproxy_spoa_hub_plugin_api::{
@@ -15,9 +16,9 @@ use haproxy_spoa_hub_plugin_api::{
 };
 use opentelemetry::Context;
 use opentelemetry::trace::{
-    SamplingDecision, SamplingResult, Span, SpanBuilder, SpanKind, Status, TraceContextExt,
-    TraceState, Tracer, TracerProvider as _,
+    Span, SpanBuilder, SpanKind, Status, TraceContextExt, TraceState, Tracer, TracerProvider as _,
 };
+use opentelemetry_sdk::trace::{SamplingDecision, SamplingResult};
 
 pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> ProcessingResult {
     // Extract any incoming W3C TraceContext / Baggage from SPOE args.
@@ -45,15 +46,21 @@ pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> Pro
         let pipeline_name = span_rule.tracer_pipeline.as_deref();
         if let Some(provider) = state.pipelines.tracer_or_default(pipeline_name) {
             let tracer = provider.tracer(state.config.instrumentation.name.clone());
-            let mut builder =
+            let builder =
                 SpanBuilder::from_name(span_rule.name.clone()).with_kind(SpanKind::Server);
-            if let Some(forced) = forced_sampling_result(resolution.sample_decision) {
-                builder = builder.with_sampling_result(forced);
-            }
-            let active_context = if resolution.effective_root {
+            // opentelemetry-rust 0.32 removed `SpanBuilder::with_sampling_result`,
+            // so per-message overrides now flow through Context: the
+            // `ForcingSampler` configured on every tracer pipeline reads
+            // back the `ForceSampling` value here in `should_sample` and
+            // returns it verbatim. See `pipelines/sampler.rs`.
+            let base_context = if resolution.effective_root {
                 Context::new()
             } else {
                 parent_context.clone()
+            };
+            let active_context = match forced_sampling_result(resolution.sample_decision) {
+                Some(forced) => base_context.with_value(ForceSampling(forced)),
+                None => base_context,
             };
             let mut span = tracer.build_with_context(builder, &active_context);
 
@@ -125,10 +132,12 @@ pub fn handle(state: &RuntimeState, scope: &Scope, message: &SpoeMessage) -> Pro
     ProcessingResult::from_vars(vars)
 }
 
-/// Translate a per-message `SampleDecision` into a `SamplingResult` that
-/// `SpanBuilder::with_sampling_result` will short-circuit the configured
-/// sampler with. Returns `None` when no override is requested (the SDK
-/// then calls the configured sampler as usual). Spec §FR-002.
+/// Translate a per-message `SampleDecision` into a `SamplingResult`. The
+/// caller injects the returned value into the parent `Context` via
+/// `ForceSampling`; `ForcingSampler::should_sample` reads it back and
+/// short-circuits the configured sampler with it. Returns `None` when
+/// no override is requested (the configured sampler decides as usual).
+/// Spec §FR-002.
 fn forced_sampling_result(decision: SampleDecision) -> Option<SamplingResult> {
     let sampling_decision = match decision {
         SampleDecision::UseSampler => return None,

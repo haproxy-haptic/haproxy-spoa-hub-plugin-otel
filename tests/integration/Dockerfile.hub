@@ -1,11 +1,11 @@
-FROM rust:1.86-bookworm AS builder-hub
+FROM rust:1.88-bookworm AS builder-hub
 WORKDIR /build
 COPY haproxy-spoa-hub/Cargo.toml haproxy-spoa-hub/Cargo.lock haproxy-spoa-hub/rustfmt.toml ./
 COPY haproxy-spoa-hub/crates/ crates/
 COPY haproxy-spoa-hub/examples/ examples/
 RUN cargo build --release -p haproxy-spoa-hub
 
-FROM rust:1.86-bookworm AS builder-plugin
+FROM rust:1.88-bookworm AS builder-plugin
 WORKDIR /build
 COPY haproxy-spoa-hub-plugin-otel/Cargo.toml haproxy-spoa-hub-plugin-otel/Cargo.lock* ./
 COPY haproxy-spoa-hub-plugin-otel/src/ src/
