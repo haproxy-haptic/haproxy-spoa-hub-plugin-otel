@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-15
+
+### Added
+
+- **Prometheus metrics** via the `haproxy-spoa-hub` v0.6.0 plugin-API v2 vtable. Surfaced under the `plugin_otel_` prefix on the hub's `/metrics`.
+
+  | metric                     | kind      | labels              |
+  |----------------------------|-----------|---------------------|
+  | `dispatches_total`         | counter   | `outcome`           |
+  | `dispatch_duration_seconds`| histogram | _(no labels)_       |
+
+  `outcome` ∈ `{processed, uninitialised}`. The plugin itself never errors out of `dispatch` — the OTLP exporter's own retry/drop accounting is surfaced by the `opentelemetry-sdk` crate's internal counters; this plugin's metrics cover the SPOE-hop hot path only.
+
+### Changed
+
+- Plugin-API dep `^0.5` → `^0.6` to pick up `MetricRecorder` and the `metrics_static` macro arm. Vtable change is append-only — this plugin's v0.4.0 .so still loads on v0.5.x hubs (metrics silent there).
+
 ## [0.3.0] - 2026-05-04
 
 ### Changed
