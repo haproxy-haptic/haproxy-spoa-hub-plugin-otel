@@ -17,7 +17,10 @@ use crate::config::PluginConfig;
 use crate::dispatch::{self, RuntimeState};
 use crate::propagation::default_propagator;
 use arc_swap::ArcSwap;
-use haproxy_spoa_hub_plugin_api::{ProcessingResult, define_plugin};
+use haproxy_spoa_hub_plugin_api::{MetricRecorder, ProcessingResult, define_plugin};
+
+/// Plugin-scoped metric recorder; silent no-op on pre-v0.6 hubs.
+static METRICS: MetricRecorder = MetricRecorder::new();
 use std::sync::{Arc, OnceLock};
 
 static STATE: OnceLock<ArcSwap<RuntimeState>> = OnceLock::new();
@@ -94,7 +97,9 @@ define_plugin!(OtelPlugin, {
         &self,
         message: &SpoeMessage,
     ) -> Result<ProcessingResult, Box<dyn std::error::Error + Send + Sync>> {
+        let started = std::time::Instant::now();
         let Some(swap) = STATE.get() else {
+            METRICS.counter("dispatches_total", &[("outcome", "uninitialised")], 1);
             return Ok(ProcessingResult::from_vars(Vec::new()));
         };
         // Enter the plugin-owned runtime so any synchronous SDK calls
@@ -102,10 +107,26 @@ define_plugin!(OtelPlugin, {
         // see a tokio reactor.
         let _guard = ensure_runtime().enter();
         let state = swap.load();
-        Ok(dispatch::dispatch(&state, message))
+        let result = dispatch::dispatch(&state, message);
+
+        // Hub prefixes everything with `plugin_otel_`. `outcome` is
+        // "processed" — there's no error path in dispatch itself; the
+        // underlying OTLP exporter handles its own retry/drop with
+        // separate metrics surfaced by the opentelemetry-sdk crate
+        // (which we don't intercept).
+        METRICS.counter("dispatches_total", &[("outcome", "processed")], 1);
+        METRICS.histogram(
+            "dispatch_duration_seconds",
+            &[],
+            started.elapsed().as_secs_f64(),
+        );
+
+        Ok(result)
     }
 
     fn config_schema(&self) -> Option<&str> {
         Some(crate::config::schema::SCHEMA_JSON)
     }
+
+    metrics_static = METRICS;
 });

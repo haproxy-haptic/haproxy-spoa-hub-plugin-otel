@@ -1,6 +1,6 @@
 [package]
 name = "otel-plugin"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.86"
 description = "OpenTelemetry plugin for haproxy-spoa-hub (traces, metrics, logs via OTLP)"
@@ -10,9 +10,9 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Requires plugin-api 0.5.0+ (the hand-rolled #[repr(C)] vtable
-# migration). This plugin will not load on hubs older than v0.5.0.
-haproxy-spoa-hub-plugin-api = "0.5"
+# Requires plugin-api 0.6.0+ for the v2 vtable's set_metric_recorder.
+# Plugin still loads on v0.5.x hubs (append-only ABI).
+haproxy-spoa-hub-plugin-api = "0.6"
 
 # OpenTelemetry — see specs/001-otel-plugin/research.md for selection rationale.
 opentelemetry = "0.32"
