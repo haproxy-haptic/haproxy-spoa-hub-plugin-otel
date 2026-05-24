@@ -128,5 +128,45 @@ define_plugin!(OtelPlugin, {
         Some(crate::config::schema::SCHEMA_JSON)
     }
 
+    fn drain(&self, timeout_ms: u64) -> bool {
+        // Hub calls this between the registry swap and shutdown_all on
+        // a config reload (haproxy-spoa-hub#3, vtable v3 — see
+        // haproxy-spoa-hub@0.7.0). The OpenTelemetry SDK pipelines we
+        // host (BatchSpanProcessor, PeriodicReader, BatchLogProcessor)
+        // run on tokio tasks against the plugin-owned runtime; their
+        // pending exports complete AFTER the SPOE ACK has returned.
+        // Without this override the runtime would be dropped mid-flight
+        // on hub reload and any queued spans / metric data points /
+        // log records would be lost.
+        //
+        // Delegates to the existing `PipelineSet::drain`, which was
+        // already wired for the in-plugin reload path (when `init()`
+        // runs a config-swap on the same plugin instance). The hub-
+        // initiated drain reuses the same primitive — same SDK
+        // shutdown calls flush the same queues.
+        //
+        // Timeout semantics: this function returns `true` once the
+        // SDK shutdown calls have completed. `PipelineSet::drain` does
+        // not currently enforce the timeout itself (the underlying
+        // SDK shutdown calls have their own internal timeouts via the
+        // BatchSpanProcessorBuilder / PeriodicReaderBuilder configs),
+        // so a slow OTLP backend could exceed `timeout_ms`. The hub
+        // measures real-time against the deadline regardless and
+        // increments `spoa_hub_config_reload_drain_forced_total{
+        // plugin="otel"}` if drain runs over — but this function
+        // never returns `false` itself. Follow-up work to enforce the
+        // timeout via `tokio::time::timeout` around the shutdown
+        // calls can refine that.
+        let Some(swap) = STATE.get() else {
+            // init() never ran or STATE never populated — nothing to drain.
+            return true;
+        };
+        let state = swap.load();
+        state
+            .pipelines
+            .drain(std::time::Duration::from_millis(timeout_ms));
+        true
+    }
+
     metrics_static = METRICS;
 });
