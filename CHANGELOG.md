@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-24
+
+### Added
+
+- **`drain()` override** for the v3 plugin-API drain phase introduced in `haproxy-spoa-hub` v0.7.0 (`haproxy-spoa-hub#3`). Delegates to the existing `PipelineSet::drain` primitive, which calls `shutdown()` on every loaded tracer / meter / logger — same SDK shutdown calls the in-plugin reload path already used when `init()` runs a config-swap on the same instance. Same OTLP / OTel-SDK queues get flushed. Before this release, hub reloads dropped the plugin-owned tokio runtime mid-flight (`runtime.Drop`), so any queued spans / metric data points / log records that hadn't been exported yet were lost. With v0.5.0 on a v0.7.0+ hub the SDK pipelines get a chance to flush before the runtime is torn down.
+
+### Changed
+
+- Plugin-API dep `^0.6` → `^0.7` to pick up the v3 vtable. Vtable evolution is append-only — this plugin's v0.5.0 `.so` still loads on v0.6.x and v0.5.x hubs (those hubs ignore the appended `drain` field, no behavioural change for them — the runtime-drop-mid-flight bug remains on those hubs, which is their existing behaviour, not a regression introduced here).
+
+### Known limitations
+
+- The drain body delegates to `PipelineSet::drain`, which currently does NOT enforce the `timeout_ms` argument itself — the underlying OpenTelemetry SDK shutdown calls have their own internal timeouts via the `BatchSpanProcessorBuilder` / `PeriodicReaderBuilder` configs. If those run over the hub's budget, the hub measures real-time against the deadline and increments `spoa_hub_config_reload_drain_forced_total{plugin="otel"}`, but the plugin itself never returns `false` from its drain body. Today's behaviour is strictly better than pre-v0.7 (full loss); follow-up work to wrap the SDK shutdown calls in `tokio::time::timeout` can make drain reject early and surface forced-shutdown.
+
+### Notes for operators
+
+- On hubs older than v0.7.0: this release behaves identically to v0.4.0 — drain is never called. No reason to upgrade unless you're also upgrading the hub.
+- On hub v0.7.0+: in-flight OTLP exports get a chance to land before the plugin is torn down on reload.
+
 ## [0.4.0] - 2026-05-15
 
 ### Added
