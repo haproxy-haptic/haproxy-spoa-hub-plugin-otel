@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Requires plugin-api 0.6.0+ for the v2 vtable's set_metric_recorder.
 # Plugin still loads on v0.5.x hubs (append-only ABI).
-haproxy-spoa-hub-plugin-api = "0.7"
+haproxy-spoa-hub-plugin-api = "0.8"
 
 # OpenTelemetry — see specs/001-otel-plugin/research.md for selection rationale.
 opentelemetry = "0.32"
@@ -44,7 +44,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.0"
 humantime-serde = "1"
-jsonschema = { version = "0.49", default-features = false }
+jsonschema = { version = "0.50", default-features = false }
 url = { version = "2", features = ["serde"] }
 
 # Concurrent correlation map (DashMap per research item R4).
