@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    container: rust:1.94-bookworm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup component add rustfmt
+      - run: cargo fmt -- --check
+
+  clippy:
+    runs-on: ubuntu-24.04
+    container: rust:1.94-bookworm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup component add clippy
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    runs-on: ubuntu-24.04
+    container: rust:1.94-bookworm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo test --all-features
+
+  build:
+    uses: ./.github/workflows/build.yml
+
+  e2e:
+    needs: [fmt, clippy, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # The integration compose file builds from ../../.., so both repos sit side by side.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: haproxy-spoa-hub-plugin-otel
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: haproxy-haptic/haproxy-spoa-hub
+          ref: main
+          path: haproxy-spoa-hub
+          persist-credentials: false
+      - name: Run e2e
+        working-directory: haproxy-spoa-hub-plugin-otel/tests/integration
+        run: |
+          for _ in 1 2 3; do if docker pull traefik/whoami:latest; then break; fi; sleep 5; done
+          make build
+          make test
+      - name: Logs
+        if: always()
+        working-directory: haproxy-spoa-hub-plugin-otel/tests/integration
+        run: make logs || true

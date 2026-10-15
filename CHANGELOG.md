@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development and releases moved to GitHub (`https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel`); GitLab is a read-only mirror.
+
 ## [0.5.0] - 2026-05-24
 
 ### Added
@@ -94,5 +98,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TraceContext + Baggage propagation across SPOE messages.
 - Multi-arch release artifacts: `amd64`, `arm64`, `armv7` (glibc 2.36).
 
-[Unreleased]: https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/-/compare/v0.1.0...HEAD
-[0.1.0]: https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/-/tags/v0.1.0
+[Unreleased]: https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/releases/tag/v0.1.0

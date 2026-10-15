@@ -19,7 +19,7 @@ deployment to your first sampled distributed trace in under 30 minutes
 ## 1. Build (or download) the plugin
 
 ```bash
-git clone https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel.git
+git clone https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel.git
 cd haproxy-spoa-hub-plugin-otel
 cargo build --release
 cp target/release/libotel_plugin.so /opt/spoa-plugins/

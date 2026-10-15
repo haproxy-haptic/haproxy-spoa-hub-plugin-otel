@@ -1,0 +1,88 @@
+name: build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=crate depName=cargo-auditable
+  CARGO_AUDITABLE_VERSION: "0.7.4"
+  CARGO_INCREMENTAL: "0"
+  GLIBC_VERSION: "2.36"
+  LIB_NAME: libotel_plugin
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # bookworm pins glibc 2.36, the floor the published .so targets.
+    container: rust:1.94-bookworm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+            cross_pkg: gcc-aarch64-linux-gnu
+            cross_linker: aarch64-linux-gnu-gcc
+          - arch: armv7
+            target: armv7-unknown-linux-gnueabihf
+            cross_pkg: gcc-arm-linux-gnueabihf
+            cross_linker: arm-linux-gnueabihf-gcc
+    env:
+      ARCH: ${{ matrix.arch }}
+      RUST_TARGET: ${{ matrix.target }}
+      CROSS_PKG: ${{ matrix.cross_pkg }}
+      CROSS_LINKER: ${{ matrix.cross_linker }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up toolchain
+        run: |
+          rustup target add "${RUST_TARGET}"
+          if [ -n "${CROSS_PKG}" ]; then
+            apt-get update -qq && apt-get install -y -qq "${CROSS_PKG}" >/dev/null
+            mkdir -p .cargo
+            printf '[target.%s]\nlinker = "%s"\n' "${RUST_TARGET}" "${CROSS_LINKER}" > .cargo/config.toml
+          fi
+          cargo install --locked "cargo-auditable@${CARGO_AUDITABLE_VERSION}"
+      - name: Build
+        run: |
+          cargo auditable build --release --target "${RUST_TARGET}"
+          mkdir -p artifacts
+          name="${LIB_NAME}-${ARCH}-glibc${GLIBC_VERSION}.so"
+          cp "target/${RUST_TARGET}/release/${LIB_NAME}.so" "artifacts/${name}"
+          ls -lh "artifacts/${name}"
+          (cd artifacts && sha256sum "${name}" > "${name}.sha256")
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugin-${{ matrix.arch }}
+          path: artifacts/
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64, armv7]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        with:
+          platforms: arm64,arm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plugin-${{ matrix.arch }}
+          path: artifacts/
+      - run: tests/smoke/run.sh --arch "${ARCH}"
+        env:
+          ARCH: ${{ matrix.arch }}
