@@ -1,6 +1,6 @@
 # HAProxy SPOA Hub — OpenTelemetry plugin
 
-A [haproxy-spoa-hub](https://gitlab.com/haproxy-haptic/haproxy-spoa-hub)
+A [haproxy-spoa-hub](https://github.com/haproxy-haptic/haproxy-spoa-hub)
 plugin that emits OpenTelemetry traces, metrics, and logs from HAProxy
 traffic over OTLP. Mirrors the directive vocabulary of HAProxy's built-in
 OpenTelemetry addon so operators can adopt OTel today and migrate to the
@@ -40,7 +40,7 @@ or OTLP/HTTP (Protobuf or JSON) to an OpenTelemetry-compatible backend.
 - HAProxy ≥ 2.8 with SPOE support compiled in (the haproxytech images
   satisfy this).
 - `haproxy-spoa-hub` already running. See its
-  [README](https://gitlab.com/haproxy-haptic/haproxy-spoa-hub) for
+  [README](https://github.com/haproxy-haptic/haproxy-spoa-hub) for
   setup.
 - An OpenTelemetry-compatible backend (OTel Collector, Tempo, Jaeger
   2.x, Honeycomb, Datadog OTLP endpoint, etc.).
@@ -50,12 +50,12 @@ or OTLP/HTTP (Protobuf or JSON) to an OpenTelemetry-compatible backend.
 
 Pre-built binaries for `amd64`, `arm64`, and `armv7` (glibc ≥ 2.36,
 Debian bookworm baseline) are published on the project's
-[release page](https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/-/releases).
+[release page](https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/releases).
 
 To build from source:
 
 ```bash
-git clone https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel.git
+git clone https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel.git
 cd haproxy-spoa-hub-plugin-otel
 cargo build --release
 cp target/release/libotel_plugin.so /opt/spoa-plugins/

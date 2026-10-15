@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitlab.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/contracts/plugin-config-schema.json",
+  "$id": "https://github.com/haproxy-haptic/haproxy-spoa-hub-plugin-otel/contracts/plugin-config-schema.json",
   "title": "haproxy-spoa-hub-plugin-otel configuration",
   "description": "JSON Schema for the TOML configuration the plugin accepts under [plugins.params]. Returned from the plugin's config_schema() entry point. Mirrors the directive vocabulary of HAProxy's built-in OpenTelemetry addon. Representative subset; full schema is generated mechanically from addon-directive-mapping.md during implementation.",
   "type": "object",
