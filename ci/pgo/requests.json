@@ -6,6 +6,9 @@
       "method": "GET",
       "path": "/catalog"
     },
-    "expect": {}
+    "expect": {
+      "otel.__status": "ok",
+      "otel.tracestate_out": ""
+    }
   }
 ]
