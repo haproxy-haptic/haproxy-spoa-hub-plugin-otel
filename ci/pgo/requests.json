@@ -1,0 +1,11 @@
+[
+  {
+    "message": "otel-on-request",
+    "args": {
+      "_event": "otel-on-request",
+      "method": "GET",
+      "path": "/catalog"
+    },
+    "expect": {}
+  }
+]
