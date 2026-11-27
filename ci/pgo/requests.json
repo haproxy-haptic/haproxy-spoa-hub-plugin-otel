@@ -10,5 +10,18 @@
       "otel.__status": "ok",
       "otel.tracestate_out": ""
     }
+  },
+  {
+    "message": "otel-on-request",
+    "args": {
+      "_event": "otel-on-request",
+      "method": "GET",
+      "path": "/catalog",
+      "_sample": "drop"
+    },
+    "expect": {
+      "otel.__status": "ok",
+      "otel.tracestate_out": ""
+    }
   }
 ]

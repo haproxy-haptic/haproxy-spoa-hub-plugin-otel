@@ -75,3 +75,11 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 - **PATCH**: Bug fixes, dependency bumps with no behavior change, performance improvements, documentation updates.
 
 Pre-release versions use suffixes: `v0.1.0-alpha.1`, `v0.1.0-beta.1`, `v0.1.0-rc.1`.
+
+## Profile-guided builds
+
+The pinned build driver downloads the v0.13.0 hub release binary for the
+target architecture and verifies its SHA-256 before loading the instrumented
+plugin. The fixture sends sampled and dropped requests and checks the trace
+propagation reply. Review the training-host version when updating the driver
+or changing the plugin ABI.

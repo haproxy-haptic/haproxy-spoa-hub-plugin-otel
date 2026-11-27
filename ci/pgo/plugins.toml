@@ -3,13 +3,13 @@ name = "otel"
 library = "libotel_plugin.so"
 messages = ["otel-on-request"]
 [plugins.params.instrumentation]
-name = "smoke"
+name = "release-training"
 scopes = ["request"]
 
 [[plugins.params.tracer_pipelines]]
 name = "default"
 [plugins.params.tracer_pipelines.sampler]
-kind = "always_off"
+kind = "always_on"
 [plugins.params.tracer_pipelines.exporter]
 endpoint = "http://127.0.0.1:65535"
 protocol = "grpc"
@@ -20,3 +20,9 @@ event = "otel-on-request"
 kind  = "request"
 [[plugins.params.scopes.spans]]
 name = "haproxy.request"
+[[plugins.params.scopes.attributes]]
+key = "http.request.method"
+source = "$$arg.method"
+[[plugins.params.scopes.attributes]]
+key = "url.path"
+source = "$$arg.path"
